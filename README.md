@@ -8,7 +8,7 @@
 
 Features configurable backend support for use with other simulators in the future.
 
-[Installation](#installation) · [References](#references)
+[Installation](#installation) · [References](#references) · [To Do](#to-do-list)
 
 
 ---
@@ -34,3 +34,13 @@ gui.run()
 # References
 
 Lorem ipsum.
+
+# To-do List:
+
+ - Migrate code from private repo here
+ - Finish and load test notebook for data processing suite
+ - Complete modeling suite functionality
+ - Validate modeling code with another notebook + load
+ - Finish applying formatting changes and customization tools to observer mode
+ - Write example script for time-of-flight or entanglement distribution SeQUeNCe experiment
+ - Look into [pdoc](https://pdoc.dev/) for generating code documentation

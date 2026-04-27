@@ -48,3 +48,4 @@ Lorem ipsum.
     - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
  - Write example script for time-of-flight or entanglement distribution SeQUeNCe experiment
  - Look into [pdoc](https://pdoc.dev/) for generating code documentation
+    - Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/)

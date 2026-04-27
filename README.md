@@ -1,6 +1,14 @@
 # Simulator 2 (Simtwo)
 
-Quantum channel simulator with standalone GUI and backend support for SeQUeNCe experiment integration.
+### Quantum channel simulator with standalone GUI and backend support for SeQUeNCe experiment integration
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+Features configurable backend support for use with other simulators in the future.
+
+[Installation](#installation) · [References](#references)
+
+---
 
 # Installation
 
@@ -19,3 +27,7 @@ from simtwo.gui import SimulatorGUI
 gui = SimulatorGUI()
 gui.run()
 ```
+
+# References
+
+Lorem ipsum.

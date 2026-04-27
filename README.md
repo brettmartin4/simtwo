@@ -40,7 +40,11 @@ Lorem ipsum.
  - Migrate code from private repo here
  - Finish and load test notebook for data processing suite
  - Complete modeling suite functionality
+    - Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)
  - Validate modeling code with another notebook + load
  - Finish applying formatting changes and customization tools to observer mode
+    - Allow for selection of y axis value (or values if dual-axis) based on available models (time sync, prop delay, etc)
+    - Update Poincare sphere plot to reflect stochastic drift model unless specified by some dropdown
+    - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
  - Write example script for time-of-flight or entanglement distribution SeQUeNCe experiment
  - Look into [pdoc](https://pdoc.dev/) for generating code documentation

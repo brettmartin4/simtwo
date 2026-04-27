@@ -8,8 +8,9 @@
 
 Features configurable backend support for use with other simulators in the future.
 
+<div align="center">
 [Installation](#installation) · [References](#references)
-
+</div>
 
 ---
 

@@ -10,6 +10,7 @@ Features configurable backend support for use with other simulators in the futur
 
 <div align="center">
   [Installation](#installation) · [References](#references)
+  <p>Lorem ipsum</p>
 </div>
 
 ---

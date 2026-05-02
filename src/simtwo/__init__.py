@@ -1,0 +1,3 @@
+# Expose public functions here later on...
+
+__version__ = "0.0.2"

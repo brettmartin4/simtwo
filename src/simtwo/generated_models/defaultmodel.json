@@ -1,0 +1,15 @@
+{
+  "name": "defaultmodel",
+  "mode": "new",
+  "metadata": {
+    "epochs": 50,
+    "learning_rate": 0.0010000000474974513,
+    "feature_names": [
+      "temperature_x",
+      "temperature_y"
+    ],
+    "target_name": "clock_error",
+    "source_model_path": ""
+  },
+  "params": {}
+}

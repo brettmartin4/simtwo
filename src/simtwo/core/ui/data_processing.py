@@ -114,11 +114,9 @@ def add_derivative(dataset: ProcessingDataset, column: str, *, output_name: str 
     if column not in dataset.df.columns:
         raise ValueError(f"Column '{column}' not found.")
     y = pd.to_numeric(dataset.df[column], errors="coerce")
-    t_sec = pd.to_numeric(dataset.df[POSIX_TIME_COL], errors="coerce") / 1000.0
     dy = y.diff()
-    dt = t_sec.diff().replace(0.0, np.nan)
     out_name = output_name or f"{column}_derivative"
-    dataset.df[out_name] = dy / dt
+    dataset.df[out_name] = dy
     return out_name
 
 

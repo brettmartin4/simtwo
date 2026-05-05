@@ -38,11 +38,7 @@ import pandas as pd
 from imgui.integrations.glfw import GlfwRenderer 
 from OpenGL import GL
 
-import tkinter as tk
-from tkinter import filedialog
-
-
-import pynfd
+import filedialpy
 
 
 class SimImGuiApp:
@@ -156,6 +152,22 @@ class SimImGuiApp:
     def set_status(self, text: str) -> None:
         with self.ui.lock:
             self.ui.status = text
+
+    def _ask_save_path(self, *, title: str, default_filename: str, default_extension: str, filters: list[str], initial_dir: str | None = None) -> str:
+        path = filedialpy.saveFile(
+            initial_dir=initial_dir or os.getcwd(),
+            initial_file=default_filename,
+            title=title,
+            filter=filters)
+
+        if not path:
+            return ""
+
+        root, ext = os.path.splitext(path)
+        if default_extension and not ext:
+            path = f"{root}{default_extension}"
+
+        return path
 
     def cb_plot(self, epoch: int, travel_time_s: float) -> None:
         with self.ui.lock:
@@ -593,44 +605,16 @@ class SimImGuiApp:
         try:
             ds = self.active_processing_dataset
             safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in ds.name) or "dataset"
-            default_filename = f"{safe_name}.csv"
-            path = None
 
-            try:
-                res = pynfd.save_file_dialog(filter_list=["csv"])
-                if res and res[0] == pynfd.Result.OK:
-                    path = res[1]
-                else:
-                    self.set_status("Save dataframe cancelled.")
-                    return
-            except Exception:
-                path = None
+            path = self._ask_save_path(
+                                    title="Save Active Dataset as CSV",
+                                default_filename=f"{safe_name}.csv",
+                            default_extension=".csv",
+                        filters=["*.csv", "*"])
 
             if not path:
-                try:
-
-                    root = tk.Tk()
-                    root.withdraw()
-                    try:
-                        root.attributes("-topmost", True)
-                    except Exception:
-                        pass
-
-                    path = filedialog.asksaveasfilename(
-                        title="Save Active Dataset as CSV",
-                        initialdir=os.getcwd(),
-                        initialfile=default_filename,
-                        defaultextension=".csv",
-                        filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-                    )
-                    root.destroy()
-
-                    if not path:
-                        self.set_status("Save dataframe cancelled.")
-                        return
-                except Exception as exc:
-                    # tkinter?
-                    raise RuntimeError("Could not open a save dialog. Install pynfd or ensure tkinter is available.") from exc
+                self.set_status("Save dataframe cancelled.")
+                return
 
             ds.df.to_csv(path, index=False)
             self.set_status(f"Saved dataframe to: {path}")
@@ -658,10 +642,13 @@ class SimImGuiApp:
     # Helpers for modeling
     def export_results(self) -> None:
         try:
-            res = pynfd.save_file_dialog(filter_list=["csv"])
-            if res and res[0] == pynfd.Result.OK:
-                path = res[1]
-            else:
+            path = self._ask_save_path(
+                                    title="Export Results as CSV",
+                                default_filename="results.csv",
+                            default_extension=".csv",
+                        filters=["*.csv", "*"])
+
+            if not path:
                 self.set_status("Export cancelled.")
                 return
 
@@ -707,12 +694,19 @@ class SimImGuiApp:
     def save_current_model(self) -> None:
         safe_name = self.new_model_name.strip() or "trained_model"
         safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in safe_name).strip("_") or "trained_model"
-        default_path = os.path.join(os.getcwd(), "generated_models", f"{safe_name}.joblib")
+
         try:
-            res = pynfd.save_file_dialog(filter_list=["joblib"])
-            if res and res[0] == pynfd.Result.OK:
-                path = res[1]
-            else:
+            model_dir = os.path.join(os.getcwd(), "generated_models")
+            os.makedirs(model_dir, exist_ok=True)
+
+            path = self._ask_save_path(
+                                    title="Save Trained Model",
+                                default_filename=f"{safe_name}.joblib",
+                            default_extension=".joblib",
+                        filters=["*.joblib", "*"],
+                    initial_dir=model_dir)
+
+            if not path:
                 self.set_status("Model save cancelled.")
                 return
 
@@ -803,7 +797,7 @@ class SimImGuiApp:
 def run_app(backend: SimulationBackend) -> None:
     # TODO: Can probably remove
     if glfw is None or imgui is None or GlfwRenderer is None or GL is None:
-        # update: Do I still need tkinter? Or does the toml file ensure that everything is installed? This might be superfluous, if so:
+        # update: Do I still need these? Or does the toml file ensure that everything is installed? This might be superfluous, if so:
         raise RuntimeError("The ImGui GUI requires 'pyimgui', 'glfw', and 'PyOpenGL'. Install them before running the GUI.")
 
     glfw.init()

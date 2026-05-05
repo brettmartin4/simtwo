@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING
 
 
 import imgui
-
+from typing import TYPE_CHECKING
 
 from simtwo.core.ui.data_processing import POSIX_TIME_COL, candidate_time_columns
 
-from simtwo.core.ui.main_window import SimImGuiApp
+if TYPE_CHECKING:
+    from simtwo.core.ui.main_window import SimImGuiApp
 
 
 MODEL_EXTENSIONS = (".json", ".pkl", ".pickle", ".joblib", ".keras", ".h5")

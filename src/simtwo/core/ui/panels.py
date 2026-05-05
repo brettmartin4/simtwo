@@ -4,15 +4,16 @@ import os
 from typing import TYPE_CHECKING
 
 import imgui
-
+from typing import TYPE_CHECKING
 
 from simtwo.core.backends.protocol import ChannelModelConfig
 from simtwo.core.modeling.model import SUPPORTED_MODEL_KINDS
 from simtwo.core.ui.dialogs import draw_existing_model_picker_window
 from simtwo.core.ui.plots import draw_line_plot
 
-
-from simtwo.core.ui.main_window import SimImGuiApp
+# caused circular import error when left out:
+if TYPE_CHECKING:
+    from simtwo.core.ui.main_window import SimImGuiApp
 
 
 

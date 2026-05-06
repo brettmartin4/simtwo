@@ -51,6 +51,4 @@ Lorem ipsum.
  - Look into [pdoc](https://pdoc.dev/) for generating code documentation
     - Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)
 
----
-
 [^simtwo]: <sub>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour is currently underway.</sub>

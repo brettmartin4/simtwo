@@ -1,4 +1,4 @@
-# Simulator 2 (Simtwo)
+# Simulator 2 (Simtwo) [^simtwo]
 
 ### Quantum channel simulator with standalone GUI and backend support for SeQUeNCe experiment integration
 
@@ -53,4 +53,4 @@ Lorem ipsum.
 
 ---
 
-[^simtwo]: <sub><em>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour is currently underway.</em></sub>
+[^simtwo]: <sub>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour is currently underway.</sub>

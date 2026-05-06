@@ -53,4 +53,4 @@ Lorem ipsum.
 
 ---
 
-<small><em>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour is currently underway.</em></small>
+[^simtwo]: <sub><em>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour is currently underway.</em></sub>

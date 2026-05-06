@@ -135,7 +135,8 @@ def add_quantified_column(dataset: ProcessingDataset, column: str, *, method: st
     if method == "rolling_extremal_difference":
         values = s.rolling(window=window, min_periods=1).max() - s.rolling(window=window, min_periods=1).min()
     elif method == "rolling_anchored_difference":
-        values = s - s.shift(window - 1)
+        #values = s - s.shift(window - 1)
+        values = s.rolling(window=window, min_periods=1).apply(lambda a: abs(a - a[0]).max(), raw=True)
     elif method == "rolling_stdev":
         values = s.rolling(window=window, min_periods=1).std()
     elif method == "rolling_variance":

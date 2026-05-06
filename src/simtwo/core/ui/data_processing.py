@@ -22,12 +22,12 @@ COMMON_TIMEZONES = [
     "Europe/Paris",
 ]
 
-# TODO: Again, expand this, maybe? AFAIK, s and ms posix times are all there are
-POSIX_UNIT_FACTORS_TO_MS = {
-    "s": 1000.0,
-    "ms": 1.0,
-    "us": 1e-3,
-    "ns": 1e-6,
+# Fixed from ms (was doing multiple ocnversions earlier)
+POSIX_UNIT_FACTORS_TO_SECONDS = {
+    "s": 1.0,
+    "ms": 1e-3,
+    "us": 1e-6,
+    "ns": 1e-9,
 }
 
 # This is the data class held by the GUI
@@ -83,19 +83,26 @@ def ensure_posix_time(dataset: ProcessingDataset) -> None:
 
     series = dataset.df[dataset.time_column]
     numeric = pd.to_numeric(series, errors="coerce")
+
     if numeric.notna().sum() >= max(1, len(series) // 2):
-        factor = POSIX_UNIT_FACTORS_TO_MS.get(dataset.posix_unit, 1.0)
-        posix_ms = numeric.astype(float) * factor
+        factor = POSIX_UNIT_FACTORS_TO_SECONDS.get(dataset.posix_unit, 1.0)
+        posix_s = numeric.astype(float) * factor
     else:
         dt = pd.to_datetime(series, errors="coerce")
         if getattr(dt.dt, "tz", None) is None:
             dt = dt.dt.tz_localize(dataset.timezone, nonexistent="shift_forward", ambiguous="NaT")
         else:
             dt = dt.dt.tz_convert(dataset.timezone)
-        posix_ms = (dt.astype("int64") // 1_000_000).astype(float)
 
-    dataset.df[POSIX_TIME_COL] = posix_ms
+        posix_s = (dt.astype("int64") // 1_000_000_000).astype(float)
+
+    dataset.df[POSIX_TIME_COL] = posix_s
     dataset.df = dataset.df.dropna(subset=[POSIX_TIME_COL]).sort_values(POSIX_TIME_COL).reset_index(drop=True)
+
+    # Important: prevent repeated conversion from multiplying again later.
+    dataset.time_column = POSIX_TIME_COL
+    dataset.posix_unit = "s"
+    dataset.timezone = "UTC"
 
 
 def numeric_columns(df: pd.DataFrame, *, exclude: Iterable[str] = ()) -> list[str]:
@@ -326,7 +333,7 @@ def merge_datasets_on_posix(datasets: list[ProcessingDataset], *, merged_name: s
         source_paths=source_paths,
         time_column=POSIX_TIME_COL,
         timezone="UTC",
-        posix_unit="ms",
+        posix_unit="s",
         notes=["Merged by nearest overlapping POSIX timestamps after trimming non-overlapping tails."],
     )
 

@@ -60,12 +60,15 @@ class SimImGuiApp:
         self.show_import_format_window = False
         self.import_candidate_paths: list[str] = []
         self.import_file_headers: dict[str, list[str]] = {}
-        self.import_merge_mode_options = ["keep_separate", "concat_rows", "merge_on_feature"]
+        self.import_merge_mode_options = ["keep_separate", "concat_rows", "merge_on_feature", "merge_on_posix_time"]
         self.import_merge_mode_idx = 0
         self.import_merge_how_options = ["inner", "left", "outer"]
         self.import_merge_how_idx = 0
         self.import_common_merge_columns: list[str] = []
         self.import_merge_column_idx = 0
+        self.import_posix_time_column_idx = 0
+        self.import_posix_unit_idx = 0 # this refers to the processing posix units, so 0=s, 1=ms, 2=us and 3=ns
+        self.import_timezone_idx = 0
         self.last_import_summary: dict[str, Any] = {}
 
         # Modeling suite scren
@@ -263,12 +266,17 @@ class SimImGuiApp:
         if not paths:
             self.set_status("Select at least one data file first.")
             return
+        
         self.import_candidate_paths = list(paths)
         self.import_file_headers = {path: self._read_csv_headers(path) for path in paths}
         header_sets = [set(headers) for headers in self.import_file_headers.values() if headers]
         self.import_common_merge_columns = sorted(set.intersection(*header_sets)) if header_sets else []
         self.import_merge_column_idx = 0
         self.import_merge_how_idx = 0
+        self.import_posix_time_column_idx = 0
+        self.import_posix_unit_idx = 0
+        self.import_timezone_idx = 0
+
         if len(paths) <= 1:
             self.import_merge_mode_idx = 0
         elif self.import_common_merge_columns:
@@ -309,6 +317,32 @@ class SimImGuiApp:
                 )
             ]
             combine_mode = "concat_rows"
+        elif merge_mode == "merge_on_posix_time":
+            if not self.import_common_merge_columns:
+                raise ValueError("No shared time column is available across the selected files.")
+
+            time_col = self.import_common_merge_columns[self.import_posix_time_column_idx]
+            posix_unit = self.processing_posix_units[self.import_posix_unit_idx]
+            timezone = self.processing_timezones[self.import_timezone_idx]
+
+            temp_datasets: list[ProcessingDataset] = []
+            for path, df in frames:
+                temp_datasets.append(
+                    ProcessingDataset(
+                        name=os.path.splitext(os.path.basename(path))[0],
+                        df=df.copy(),
+                        source_paths=[path],
+                        time_column=time_col,
+                        timezone=timezone,
+                        posix_unit=posix_unit))
+
+            merged = merge_datasets_on_posix(
+                temp_datasets,
+                merged_name="merged_import",
+            )
+
+            datasets = [merged]
+            combine_mode = f"merge_on_posix_time:{posix_unit}"
         else:
             if not self.import_common_merge_columns:
                 raise ValueError("No shared merge column is available across the selected files.")
@@ -335,9 +369,16 @@ class SimImGuiApp:
             "combine_mode": combine_mode,
             "paths": list(paths),
         }
+
         if len(paths) > 1 and merge_mode == "merge_on_feature" and self.import_common_merge_columns:
             summary["merge_column"] = self.import_common_merge_columns[self.import_merge_column_idx]
             summary["merge_how"] = self.import_merge_how_options[self.import_merge_how_idx]
+
+        if len(paths) > 1 and merge_mode == "merge_on_posix_time" and self.import_common_merge_columns:
+            summary["time_column"] = self.import_common_merge_columns[self.import_posix_time_column_idx]
+            summary["posix_unit"] = self.processing_posix_units[self.import_posix_unit_idx]
+            summary["timezone"] = self.processing_timezones[self.import_timezone_idx]
+
         return datasets, summary
 
     def confirm_import_format_and_load(self) -> None:
@@ -456,6 +497,7 @@ class SimImGuiApp:
     def _selected_variable_count(self) -> int:
         return len(self.selected_processing_variables)
 
+    # TODO: Update this later to include horizonal scroll bar (the stats are cut off as-is)
     def show_processing_stats(self) -> None:
         try:
             self.processing_stats_text = descriptive_stats_text(self.active_processing_dataset)

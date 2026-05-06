@@ -167,48 +167,155 @@ def draw_import_format_window(app: "SimImGuiApp") -> None:
             "keep_separate": "Keep as separate datasets",
             "concat_rows": "Concatenate rows now",
             "merge_on_feature": "Merge by common feature now",
+            "merge_on_posix_time": "Merge by POSIX time now"
         }
+
         current_key = app.import_merge_mode_options[app.import_merge_mode_idx]
+
         if imgui.begin_combo("Combine Method", labels[current_key]):
             for idx, key in enumerate(app.import_merge_mode_options):
-                enabled = not (key == "merge_on_feature" and not app.import_common_merge_columns)
+                needs_common_column = key in ("merge_on_feature", "merge_on_posix_time")
+                enabled = not (needs_common_column and not app.import_common_merge_columns)
+
                 if not enabled:
                     imgui.push_style_var(imgui.STYLE_ALPHA, 0.5)
+
                 selected = idx == app.import_merge_mode_idx
-                clicked, _ = imgui.selectable(labels[key], selected, 0 if enabled else imgui.SELECTABLE_DISABLED)
+                clicked, _ = imgui.selectable(
+                    labels[key],
+                    selected,
+                    0 if enabled else imgui.SELECTABLE_DISABLED,
+                )
+
                 if clicked and enabled:
                     app.import_merge_mode_idx = idx
+
                 if selected:
                     imgui.set_item_default_focus()
+
                 if not enabled:
                     imgui.pop_style_var()
+
             imgui.end_combo()
 
-        if app.import_merge_mode_options[app.import_merge_mode_idx] == "merge_on_feature":
+        merge_mode = app.import_merge_mode_options[app.import_merge_mode_idx]
+
+        if merge_mode == "merge_on_feature":
             if not app.import_common_merge_columns:
-                imgui.text_colored("No common headers were found across all selected files.", 1.0, 0.6, 0.4)
+                imgui.text_colored(
+                    "No common headers were found across all selected files.",
+                    1.0,
+                    0.6,
+                    0.4,
+                )
             else:
+                if app.import_merge_column_idx >= len(app.import_common_merge_columns):
+                    app.import_merge_column_idx = 0
+
                 current_col = app.import_common_merge_columns[app.import_merge_column_idx]
+
                 if imgui.begin_combo("Common Feature", current_col):
                     for idx, col in enumerate(app.import_common_merge_columns):
                         selected = idx == app.import_merge_column_idx
                         clicked, _ = imgui.selectable(col, selected)
+
                         if clicked:
                             app.import_merge_column_idx = idx
+
                         if selected:
                             imgui.set_item_default_focus()
+
                     imgui.end_combo()
 
-                merge_how_labels = {"inner": "Inner join", "left": "Left join", "outer": "Outer join"}
+                merge_how_labels = {
+                    "inner": "Inner join",
+                    "left": "Left join",
+                    "outer": "Outer join"
+                }
+
                 current_join = app.import_merge_how_options[app.import_merge_how_idx]
+
                 if imgui.begin_combo("Join Type", merge_how_labels[current_join]):
                     for idx, key in enumerate(app.import_merge_how_options):
                         selected = idx == app.import_merge_how_idx
                         clicked, _ = imgui.selectable(merge_how_labels[key], selected)
+
                         if clicked:
                             app.import_merge_how_idx = idx
+
                         if selected:
                             imgui.set_item_default_focus()
+
+                    imgui.end_combo()
+
+        elif merge_mode == "merge_on_posix_time":
+            if not app.import_common_merge_columns:
+                imgui.text_colored(
+                    "No common headers were found across all selected files.",
+                    1.0,
+                    0.6,
+                    0.4,
+                )
+            else:
+                imgui.spacing()
+                imgui.text("POSIX Time Merge Settings")
+                imgui.text_wrapped(
+                    "Choose the shared time column and the unit used by those POSIX "
+                    "timestamps before the files are merged."
+                )
+
+                if app.import_posix_time_column_idx >= len(app.import_common_merge_columns):
+                    app.import_posix_time_column_idx = 0
+
+                current_time_col = app.import_common_merge_columns[app.import_posix_time_column_idx]
+
+                if imgui.begin_combo("Time Feature", current_time_col):
+                    for idx, col in enumerate(app.import_common_merge_columns):
+                        selected = idx == app.import_posix_time_column_idx
+                        clicked, _ = imgui.selectable(col, selected)
+
+                        if clicked:
+                            app.import_posix_time_column_idx = idx
+
+                        if selected:
+                            imgui.set_item_default_focus()
+
+                    imgui.end_combo()
+
+                if app.import_posix_unit_idx >= len(app.processing_posix_units):
+                    app.import_posix_unit_idx = 0
+
+                current_unit = app.processing_posix_units[app.import_posix_unit_idx]
+
+                if imgui.begin_combo("POSIX Unit", current_unit):
+                    for idx, unit in enumerate(app.processing_posix_units):
+                        selected = idx == app.import_posix_unit_idx
+                        clicked, _ = imgui.selectable(unit, selected)
+
+                        if clicked:
+                            app.import_posix_unit_idx = idx
+
+                        if selected:
+                            imgui.set_item_default_focus()
+
+                    imgui.end_combo()
+
+                if app.import_timezone_idx >= len(app.processing_timezones):
+                    app.import_timezone_idx = 0
+
+                current_tz = app.processing_timezones[app.import_timezone_idx]
+
+                if imgui.begin_combo("Timezone", current_tz):
+                    for idx, tz in enumerate(app.processing_timezones):
+                        selected = idx == app.import_timezone_idx
+                        clicked, _ = imgui.selectable(tz, selected)
+
+                        if clicked:
+                            app.import_timezone_idx = idx
+
+                        if selected:
+                            imgui.set_item_default_focus()
+
                     imgui.end_combo()
 
     imgui.spacing()
@@ -216,13 +323,18 @@ def draw_import_format_window(app: "SimImGuiApp") -> None:
     imgui.text_wrapped("Next, the data processing suite will open. Each dataset there must be assigned a time feature, timezone, and POSIX unit before any time-aware operations like derivatives or multi-set merging will run.")
 
     imgui.spacing()
+
     if imgui.button("Load Into Data Processing Suite", width=260):
         app.confirm_import_format_and_load()
+
     imgui.same_line()
+
     if imgui.button("Back", width=120):
         app.show_import_format_window = False
         app.show_import_picker = True
+
     imgui.same_line()
+    
     if imgui.button("Exit Import", width=160):
         app.show_import_format_window = False
         app.import_candidate_paths = []

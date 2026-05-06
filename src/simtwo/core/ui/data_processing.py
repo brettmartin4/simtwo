@@ -37,8 +37,12 @@ class ProcessingDataset:
     df: pd.DataFrame
     source_paths: list[str] = field(default_factory=list)
     time_column: str | None = None
-    timezone: str = "UTC"
-    posix_unit: str = "ms"
+    timezone: str = ""
+    posix_unit: str = ""
+    pending_time_column: str | None = None
+    pending_timezone: str = ""
+    pending_posix_unit: str = ""
+    posix_time_ready: bool = False
     notes: list[str] = field(default_factory=list)
 
     def copy(self, *, name: str | None = None) -> "ProcessingDataset":
@@ -49,6 +53,10 @@ class ProcessingDataset:
             time_column=self.time_column,
             timezone=self.timezone,
             posix_unit=self.posix_unit,
+            pending_time_column=self.pending_time_column,
+            pending_timezone=self.pending_timezone,
+            pending_posix_unit=self.pending_posix_unit,
+            posix_time_ready=self.posix_time_ready,
             notes=list(self.notes),
         )
 
@@ -76,6 +84,15 @@ def candidate_time_columns(df: pd.DataFrame) -> list[str]:
 
 
 def ensure_posix_time(dataset: ProcessingDataset) -> None:
+    if dataset.posix_time_ready and POSIX_TIME_COL in dataset.df.columns:
+        dataset.df = (
+            dataset.df
+            .dropna(subset=[POSIX_TIME_COL])
+            .sort_values(POSIX_TIME_COL)
+            .reset_index(drop=True)
+        )
+        return
+
     if dataset.time_column is None:
         raise ValueError(f"Select a time feature for '{dataset.name}' before processing.")
     if dataset.time_column not in dataset.df.columns:
@@ -98,6 +115,7 @@ def ensure_posix_time(dataset: ProcessingDataset) -> None:
 
     dataset.df[POSIX_TIME_COL] = posix_s
     dataset.df = dataset.df.dropna(subset=[POSIX_TIME_COL]).sort_values(POSIX_TIME_COL).reset_index(drop=True)
+    dataset.posix_time_ready = True
 
     # Important: prevent repeated conversion from multiplying again later.
     dataset.time_column = POSIX_TIME_COL
@@ -334,7 +352,11 @@ def merge_datasets_on_posix(datasets: list[ProcessingDataset], *, merged_name: s
         source_paths=source_paths,
         time_column=POSIX_TIME_COL,
         timezone="UTC",
-        posix_unit="s",
+        posix_unit="ms",
+        pending_time_column=POSIX_TIME_COL,
+        pending_timezone="UTC",
+        pending_posix_unit="ms",
+        posix_time_ready=True,
         notes=["Merged by nearest overlapping POSIX timestamps after trimming non-overlapping tails."],
     )
 

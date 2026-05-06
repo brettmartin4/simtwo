@@ -462,14 +462,39 @@ class SimImGuiApp:
 
     def set_processing_time_metadata(self, dataset_idx: int, *, time_column: str | None = None, timezone: str | None = None, posix_unit: str | None = None) -> None:
         ds = self.processing_datasets[dataset_idx]
+
         if time_column is not None:
-            ds.time_column = time_column
+            ds.pending_time_column = time_column
+
         if timezone is not None:
-            ds.timezone = timezone
+            ds.pending_timezone = timezone
+
         if posix_unit is not None:
-            ds.posix_unit = posix_unit
-        if ds.time_column:
-            ensure_posix_time(ds)
+            ds.pending_posix_unit = posix_unit
+
+    def apply_processing_time_metadata(self, dataset_idx: int) -> None:
+        ds = self.processing_datasets[dataset_idx]
+
+        if not ds.pending_time_column:
+            raise ValueError("Select a time feature first.")
+
+        if not ds.pending_timezone:
+            raise ValueError("Select a timezone first.")
+
+        if not ds.pending_posix_unit:
+            raise ValueError("Select a POSIX unit first.")
+
+        ds.time_column = ds.pending_time_column
+        ds.timezone = ds.pending_timezone
+        ds.posix_unit = ds.pending_posix_unit
+        ds.posix_time_ready = False
+
+        ensure_posix_time(ds)
+
+        self.set_status(
+            f"Applied POSIX time settings to '{ds.name}': "
+            f"{ds.time_column}, {ds.timezone}, {ds.posix_unit}"
+        )
 
     def _append_processing_dataset(self, dataset: ProcessingDataset, *, select: bool = True) -> None:
         self.processing_datasets.append(dataset)

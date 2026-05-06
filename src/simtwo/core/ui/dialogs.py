@@ -334,7 +334,7 @@ def draw_import_format_window(app: "SimImGuiApp") -> None:
         app.show_import_picker = True
 
     imgui.same_line()
-    
+
     if imgui.button("Exit Import", width=160):
         app.show_import_format_window = False
         app.import_candidate_paths = []
@@ -457,51 +457,86 @@ def draw_data_processing_window(app: "SimImGuiApp") -> None:
     imgui.spacing()
 
     time_candidates = candidate_time_columns(ds.df)
-    if ds.time_column not in time_candidates and ds.time_column is not None:
-        time_candidates.insert(0, ds.time_column)
-    current_time = ds.time_column if ds.time_column else (time_candidates[0] if time_candidates else "<none>")
-    if imgui.begin_combo("Time Feature", current_time):
+
+    pending_time = ds.pending_time_column or "<select time feature>"
+    if imgui.begin_combo("Time Feature", pending_time):
         for col in time_candidates:
-            selected = ds.time_column == col
+            selected = ds.pending_time_column == col
             clicked, _ = imgui.selectable(col, selected)
+
             if clicked:
-                try:
-                    app.set_processing_time_metadata(app.processing_active_dataset_idx, time_column=col)
-                except Exception as exc:
-                    app.set_status(f"Time assignment failed: {exc}")
+                app.set_processing_time_metadata(
+                    app.processing_active_dataset_idx,
+                    time_column=col,
+                )
+
             if selected:
                 imgui.set_item_default_focus()
+
         imgui.end_combo()
 
-    current_tz = ds.timezone if ds.timezone in app.processing_timezones else app.processing_timezones[0]
-    if imgui.begin_combo("Timezone", current_tz):
+
+    pending_tz = ds.pending_timezone or "<select timezone>"
+    if imgui.begin_combo("Timezone", pending_tz):
         for tz in app.processing_timezones:
-            selected = ds.timezone == tz
+            selected = ds.pending_timezone == tz
             clicked, _ = imgui.selectable(tz, selected)
+
             if clicked:
-                try:
-                    app.set_processing_time_metadata(app.processing_active_dataset_idx, timezone=tz)
-                except Exception as exc:
-                    app.set_status(f"Timezone update failed: {exc}")
+                app.set_processing_time_metadata(
+                    app.processing_active_dataset_idx,
+                    timezone=tz,
+                )
+
             if selected:
                 imgui.set_item_default_focus()
+
         imgui.end_combo()
 
-    current_unit = ds.posix_unit if ds.posix_unit in app.processing_posix_units else "ms"
-    if imgui.begin_combo("POSIX Unit", current_unit):
+
+    pending_unit = ds.pending_posix_unit or "<select POSIX unit>"
+    if imgui.begin_combo("POSIX Unit", pending_unit):
         for unit in app.processing_posix_units:
-            selected = ds.posix_unit == unit
+            selected = ds.pending_posix_unit == unit
             clicked, _ = imgui.selectable(unit, selected)
+
             if clicked:
-                try:
-                    app.set_processing_time_metadata(app.processing_active_dataset_idx, posix_unit=unit)
-                except Exception as exc:
-                    app.set_status(f"POSIX unit update failed: {exc}")
+                app.set_processing_time_metadata(
+                    app.processing_active_dataset_idx,
+                    posix_unit=unit,
+                )
+
             if selected:
                 imgui.set_item_default_focus()
+
         imgui.end_combo()
 
-    if ds.time_column and POSIX_TIME_COL in ds.df.columns:
+
+    can_apply_time = bool(
+        ds.pending_time_column
+        and ds.pending_timezone
+        and ds.pending_posix_unit
+    )
+
+    if not can_apply_time:
+        imgui.push_style_var(imgui.STYLE_ALPHA, 0.5)
+
+    clicked_apply_time = imgui.button("Apply POSIX Time Settings", width=220)
+
+    if not can_apply_time:
+        imgui.pop_style_var()
+
+    if clicked_apply_time:
+        if can_apply_time:
+            try:
+                app.apply_processing_time_metadata(app.processing_active_dataset_idx)
+            except Exception as exc:
+                app.set_status(f"POSIX time setup failed: {exc}")
+        else:
+            app.set_status("Select a time feature, timezone, and POSIX unit first.")
+
+
+    if ds.posix_time_ready and POSIX_TIME_COL in ds.df.columns:
         imgui.text_colored("POSIX time ready", 0.6, 1.0, 0.6)
     else:
         imgui.text_colored("POSIX time not ready", 1.0, 0.6, 0.4)

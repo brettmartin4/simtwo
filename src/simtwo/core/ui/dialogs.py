@@ -12,7 +12,7 @@ from simtwo.core.ui.data_processing import POSIX_TIME_COL, candidate_time_column
 if TYPE_CHECKING:
     from simtwo.core.ui.main_window import SimImGuiApp
 
-
+# TODO: Perhaps check to see if there's a more dynamic way to implement this
 MODEL_EXTENSIONS = (".json", ".pkl", ".pickle", ".joblib", ".keras", ".h5")
 DATA_EXTENSIONS = (".csv", ".txt")
 

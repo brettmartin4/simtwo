@@ -46,11 +46,29 @@ def draw_menu_bar(app: "SimImGuiApp") -> None:
 
 
 def draw_left_panel(app: "SimImGuiApp") -> None:
+    #with app.ui.lock:
+    #    xs = list(app.ui.epochs)
+    #    ys = list(app.ui.times)
+    # draw_line_plot(app.plot_label, xs, ys, size=(740, 300))
+    imgui.begin_child("##left_panel", width=0, height=0, border=False)
+
+    imgui.text("Observer View")
+    imgui.separator()
+
+    plot_width = max(240.0, imgui.get_content_region_available_width() - 8.0)
+
     with app.ui.lock:
         xs = list(app.ui.epochs)
         ys = list(app.ui.times)
-    draw_line_plot(app.plot_label, xs, ys, size=(740, 300))
 
+    if xs and ys:
+        draw_line_plot(app.plot_label, xs, ys, size=(plot_width, 300))
+    else:
+        imgui.spacing()
+        imgui.text_disabled("No model prediction data to display yet.")
+        imgui.text_disabled("Press Start to begin generating predictions.")
+
+    imgui.end_child()
 
 
 def draw_right_panel(app: "SimImGuiApp") -> None:
@@ -59,7 +77,7 @@ def draw_right_panel(app: "SimImGuiApp") -> None:
     imgui.text("Controls")
     imgui.separator()
 
-    changed, speed = imgui.slider_int("Run speed (ms)", app.ui.run_speed_ms, 10, 1000)
+    changed, speed = imgui.slider_int("Run speed (ms)", app.ui.run_speed_ms, 0, 100)
     if changed:
         app.ui.run_speed_ms = int(speed)
         app.backend.set_run_speed(app.ui.run_speed_ms)
@@ -98,6 +116,14 @@ def draw_right_panel(app: "SimImGuiApp") -> None:
     imgui.spacing()
     imgui.separator()
 
+    imgui.text("Current Model")
+    imgui.begin_child("##current_model", width=0, height=60, border=True)
+    imgui.text_wrapped(app.current_model_name)
+    imgui.end_child()
+
+    imgui.spacing()
+    imgui.separator()
+
     imgui.text("Data Source")
     imgui.begin_child("##datasource", width=0, height=60, border=True)
     imgui.text_wrapped(app.data_label)
@@ -107,7 +133,15 @@ def draw_right_panel(app: "SimImGuiApp") -> None:
         status = app.ui.status
     if status:
         imgui.spacing()
-        imgui.text_colored(status, 0.9, 0.9, 0.2)
+        imgui.separator()
+        imgui.text("Status")
+        imgui.begin_child("##status_box", width=0, height=80, border=True)
+        imgui.push_text_wrap_pos(0.0)
+        imgui.push_style_color(imgui.COLOR_TEXT, 0.9, 0.9, 0.2, 1.0)
+        imgui.text_unformatted(status)
+        imgui.pop_style_color()
+        imgui.pop_text_wrap_pos()
+        imgui.end_child()
 
     imgui.end_child()
 
@@ -241,6 +275,23 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
         imgui.separator()
         imgui.spacing()
 
+        imgui.text("Train / Validation / Test Split")
+        changed, train_pct = imgui.slider_int("Train %", int(app.split_train_pct), 1, 98)
+        if changed:
+            app.split_train_pct = int(train_pct)
+            app.split_validation_pct = min(int(app.split_validation_pct), max(1, 99 - int(app.split_train_pct)))
+        max_val_pct = max(1, 99 - int(app.split_train_pct))
+        changed, val_pct = imgui.slider_int("Validation %", int(app.split_validation_pct), 1, max_val_pct)
+        if changed:
+            app.split_validation_pct = int(val_pct)
+        train_pct, val_frac, test_frac = app.current_split_fractions()
+        imgui.text(f"Test %: {int(round(test_frac * 100))}")
+        imgui.text_disabled("Splits are applied chronologically: train first, then validation, then test.")
+
+        imgui.spacing()
+        imgui.separator()
+        imgui.spacing()
+
         if imgui.button("Train + Activate", width=160):
             app.train_and_activate_model()
         imgui.same_line()
@@ -258,9 +309,20 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
             )
             imgui.text(f"Target: {app.last_training_summary.get('target_name', '<unknown>')}")
             imgui.text(f"Samples: {app.last_training_summary.get('n_samples', 0)}")
+            imgui.text(
+                f"Split counts: train={app.last_training_summary.get('train_count', 0)}, "
+                f"val={app.last_training_summary.get('validation_count', 0)}, "
+                f"test={app.last_training_summary.get('test_count', 0)}"
+            )
             imgui.text(f"Skipped rows: {app.last_training_summary.get('skipped_rows', 0)}")
+            #imgui.text(f"Train RMSE: {app.last_training_summary.get('train_rmse', float('nan')):.6g}")
+            #imgui.text(f"Train R^2: {app.last_training_summary.get('train_r2', float('nan')):.6g}")
             imgui.text(f"Train RMSE: {app.last_training_summary.get('train_rmse', float('nan')):.6g}")
+            imgui.text(f"Validation RMSE: {app.last_training_summary.get('validation_rmse', float('nan')):.6g}")
+            imgui.text(f"Test RMSE: {app.last_training_summary.get('test_rmse', float('nan')):.6g}")
             imgui.text(f"Train R^2: {app.last_training_summary.get('train_r2', float('nan')):.6g}")
+            imgui.text(f"Validation R^2: {app.last_training_summary.get('validation_r2', float('nan')):.6g}")
+            imgui.text(f"Test R^2: {app.last_training_summary.get('test_r2', float('nan')):.6g}")
             imgui.end_child()
 
     imgui.end_child()

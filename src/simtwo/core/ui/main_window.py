@@ -5,6 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any
+from dataclasses import dataclass, field
 
 from simtwo.core.backends.protocol import ChannelModelConfig, SimulationBackend
 from simtwo.core.modeling.model import SUPPORTED_MODEL_KINDS
@@ -39,6 +40,20 @@ from imgui.integrations.glfw import GlfwRenderer
 from OpenGL import GL
 
 import filedialpy
+
+
+@dataclass
+class ObserverDataset:
+    name: str
+    df: pd.DataFrame
+    path: str = ""
+    x_column: str = "row_index"
+    y_column: str = ""
+    cached_plot_xs: list[float] = field(default_factory=list)
+    cached_plot_ys: list[float] = field(default_factory=list)
+    cached_x_column: str = ""
+    cached_y_column: str = ""
+    cache_ready: bool = False
 
 
 class SimImGuiApp:
@@ -94,6 +109,13 @@ class SimImGuiApp:
         self.rf_n_estimators = 200
         self.rf_max_depth = 0
         self.last_training_summary: dict[str, Any] = {}
+        self.split_train_pct = 70
+        self.split_validation_pct = 15
+
+        # Used for dataset type selection:
+        self.observer_datasets: list[ObserverDataset] = []
+        self.observer_selected_dataset_names: set[str] = set()
+        self.observer_show_simulation = True
 
         # Processing data
         self.show_processing_window = False
@@ -141,6 +163,24 @@ class SimImGuiApp:
     @property
     def selected_model_kind(self) -> str:
         return self.model_kind_keys[self.model_kind_idx]
+    
+    @property
+    def split_test_pct(self) -> int:
+        return max(0, 100 - int(self.split_train_pct) - int(self.split_validation_pct))
+    
+    def current_split_fractions(self) -> tuple[float, float, float]:
+        train_pct = max(1, min(98, int(self.split_train_pct)))
+        max_val = max(1, 99 - train_pct)
+        validation_pct = max(1, min(max_val, int(self.split_validation_pct)))
+
+        if train_pct + validation_pct >= 100:
+            validation_pct = max(1, 99 - train_pct)
+
+        self.split_train_pct = train_pct
+        self.split_validation_pct = validation_pct
+        test_pct = max(1, 100 - train_pct - validation_pct)
+
+        return train_pct / 100.0, validation_pct / 100.0, test_pct / 100.0
 
     # TODO: split this into multiple files, maybe?
     def current_model_params(self) -> dict[str, Any]:
@@ -247,10 +287,83 @@ class SimImGuiApp:
             return pd.read_csv(path, encoding="utf-8-sig")
         except Exception:
             return pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
+        
+    def _default_observer_y_column(self, df: pd.DataFrame) -> str:
+        cols = [str(col) for col in df.columns]
+        preferred_block = {"epoch", "posix_time", "row_index"}
+        for col in cols:
+            if str(col).lower() in preferred_block:
+                continue
+            if pd.api.types.is_numeric_dtype(df[col]):
+                return str(col)
+        for col in cols:
+            if str(col).lower() not in preferred_block:
+                return str(col)
+        return cols[0] if cols else ""
+
+    def _default_observer_x_column(self, df: pd.DataFrame) -> str:
+        for candidate in (POSIX_TIME_COL, "epoch"):
+            if candidate in df.columns:
+                return candidate
+        time_candidates = candidate_time_columns(df)
+        if time_candidates:
+            return str(time_candidates[0])
+        return "row_index"
+
+    def _register_observer_dataset(self, name: str, df: pd.DataFrame, *, path: str = "") -> None:
+
+        clean_name = name.strip() or f"dataset_{len(self.observer_datasets) + 1}"
+        observer = ObserverDataset(name=clean_name, df=df, path=path, x_column=self._default_observer_x_column(df), y_column=self._default_observer_y_column(df))
+        replaced = False
+        for idx, existing in enumerate(self.observer_datasets):
+            if existing.name == clean_name:
+                was_selected = existing.name in self.observer_selected_dataset_names
+                self.observer_datasets[idx] = observer
+                if was_selected:
+                    self.observer_selected_dataset_names.add(clean_name)
+                replaced = True
+                break
+        if not replaced:
+            self.observer_datasets.append(observer)
+
+    def _invalidate_observer_dataset_cache(self, dataset: ObserverDataset) -> None:
+        dataset.cached_plot_xs.clear()
+        dataset.cached_plot_ys.clear()
+        dataset.cached_x_column = ""
+        dataset.cached_y_column = ""
+        dataset.cache_ready = False
+
+    def _build_observer_dataset_cache(self, dataset: ObserverDataset) -> tuple[list[float], list[float], str, str]:
+        if dataset.df.empty:
+            self._invalidate_observer_dataset_cache(dataset)
+            return [], [], dataset.x_column, dataset.y_column
+
+        df = dataset.df
+        x_col = dataset.x_column if dataset.x_column in df.columns or dataset.x_column == "row_index" else self._default_observer_x_column(df)
+        y_col = dataset.y_column if dataset.y_column in df.columns else self._default_observer_y_column(df)
+
+        if x_col == "row_index":
+            x_series = pd.Series(range(len(df)), dtype=float)
+        else:
+            x_series = pd.to_numeric(df[x_col], errors="coerce")
+
+        y_series = pd.to_numeric(df[y_col], errors="coerce")
+        valid_mask = x_series.notna() & y_series.notna()
+
+        dataset.cached_plot_xs = x_series[valid_mask].astype(float).tolist()
+        dataset.cached_plot_ys = y_series[valid_mask].astype(float).tolist()
+        dataset.cached_x_column = x_col
+        dataset.cached_y_column = y_col
+        dataset.cache_ready = True
+
+        return dataset.cached_plot_xs, dataset.cached_plot_ys, x_col, y_col
 
     def _load_csv_and_open_headers(self, path: str) -> None:
         self.backend.load_data(path)
-        headers = self._read_csv_headers(path)
+        df = self._read_table(path)
+        headers = [str(h).strip() for h in df.columns.tolist() if h is not None]
+        dataset_name = os.path.splitext(os.path.basename(path))[0]
+        self._register_observer_dataset(dataset_name, df, path=path)
         self.csv_path = path
         self.csv_headers = headers
         self.feature_mask = [False] * len(headers)
@@ -706,6 +819,45 @@ class SimImGuiApp:
         except Exception as exc:
             self.set_status(f"Send to modeling failed: {exc}")
 
+
+    def observer_dataset_by_name(self, name: str) -> ObserverDataset | None:
+        for ds in self.observer_datasets:
+            if ds.name == name:
+                return ds
+        return None
+
+    @property
+    def selected_observer_datasets(self) -> list[ObserverDataset]:
+        selected: list[ObserverDataset] = []
+        for ds in self.observer_datasets:
+            if ds.name in self.observer_selected_dataset_names:
+                selected.append(ds)
+        return selected
+
+    def toggle_observer_dataset(self, name: str) -> None:
+        if name in self.observer_selected_dataset_names:
+            self.observer_selected_dataset_names.remove(name)
+        else:
+            self.observer_selected_dataset_names.add(name)
+
+    def set_observer_dataset_y_column(self, name: str, column: str) -> None:
+        ds = self.observer_dataset_by_name(name)
+        if ds is not None and ds.y_column != column:
+            ds.y_column = column
+            self._invalidate_observer_dataset_cache(ds)
+
+    def set_observer_dataset_x_column(self, name: str, column: str) -> None:
+        ds = self.observer_dataset_by_name(name)
+        if ds is not None and ds.x_column != column:
+            ds.x_column = column
+            self._invalidate_observer_dataset_cache(ds)
+
+    def observer_dataset_plot_series(self, dataset: ObserverDataset) -> tuple[list[float], list[float], str, str]:
+        if (dataset.cache_ready and dataset.cached_x_column == dataset.x_column and dataset.cached_y_column == dataset.y_column):
+            return dataset.cached_plot_xs, dataset.cached_plot_ys, dataset.cached_x_column, dataset.cached_y_column
+
+        return self._build_observer_dataset_cache(dataset)
+
     # Helpers for modeling
     def export_results(self) -> None:
         try:
@@ -735,6 +887,7 @@ class SimImGuiApp:
             self.set_status(f"Model config failed: {exc}")
 
     def train_and_activate_model(self) -> None:
+        train_fraction, validation_fraction, test_fraction = self.current_split_fractions()
         config = ChannelModelConfig(
             mode="new",
             model_name=self.new_model_name.strip() or "my_model",
@@ -744,16 +897,28 @@ class SimImGuiApp:
             target_name=self.selected_target_name,
             model_kind=self.selected_model_kind,
             model_params=self.current_model_params(),
+            train_fraction=train_fraction,
+            validation_fraction=validation_fraction,
+            test_fraction=test_fraction,
         )
         try:
             summary = dict(self.backend.train_channel_model(config) or {})
             self.last_training_summary = summary
+
+            active_name = os.path.splitext(os.path.basename(self.csv_path))[0] if self.csv_path else "active_dataset"
+            active_ds = self.observer_dataset_by_name(active_name)
+            if active_ds is not None and config.target_name:
+                if config.target_name in active_ds.df.columns:
+                    active_ds.y_column = config.target_name
+
             self.backend.reset()
             self._clear_plot_state()
             self._set_plot_label_for_config(config)
             self.set_status(
                 f"Trained {SUPPORTED_MODEL_KINDS.get(config.model_kind, config.model_kind)} as '{config.model_name}'. "
-                f"RMSE={summary.get('train_rmse', float('nan')):.4g}, R²={summary.get('train_r2', float('nan')):.4g}"
+                f"Train RMSE={summary.get('train_rmse', float('nan')):.4g}, "
+                f"Val RMSE={summary.get('validation_rmse', float('nan')):.4g}, "
+                f"Test RMSE={summary.get('test_rmse', float('nan')):.4g}"
             )
         except Exception as exc:
             self.set_status(f"Training failed: {exc}")

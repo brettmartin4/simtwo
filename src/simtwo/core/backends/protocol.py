@@ -20,6 +20,9 @@ class ChannelModelConfig:
     target_name: str | None = None
     model_kind: str = "linear_regression"
     model_params: dict[str, Any] = field(default_factory=dict)
+    train_fraction: float = 0.70
+    validation_fraction: float = 0.15
+    test_fraction: float = 0.15
 
 
 class SimulationBackend(Protocol):

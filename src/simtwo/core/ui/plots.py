@@ -8,13 +8,14 @@ from imgui.integrations.glfw import GlfwRenderer
 from OpenGL import GL
 
 
-def draw_line_plot(label: str, xs: Sequence[int], ys: Sequence[float], size: tuple[float, float] = (700, 260), pad: float = 10.0) -> None:
+def draw_line_plot(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float] = (700, 260), pad: float = 10.0) -> None:
     """
     Uses the window draw list to draw a simple line plot in an ImGui child regio
     """
 
     imgui.text(label)
-    imgui.begin_child(f"##{label}_plot", width=size[0], height=size[1], border=True)
+    child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_plot"
+    imgui.begin_child(child_id, width=size[0], height=size[1], border=True)
 
     draw_list = imgui.get_window_draw_list()
     x0, y0 = imgui.get_cursor_screen_pos()

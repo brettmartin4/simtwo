@@ -38,7 +38,7 @@ Lorem ipsum.
 # To-do List:
 
  - ~~Migrate code from private repo here~~
- - Finish and load test notebook for data processing suite
+ - ~~Finish and load test notebook for data processing suite~~
  - Complete modeling suite functionality
     - Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)
  - Validate modeling code with another notebook + load

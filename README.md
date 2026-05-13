@@ -48,6 +48,7 @@ Lorem ipsum.
     - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
        - Change plot axis selection so either y axis can plot: a variable from the loaded dataset, inference from a loaded model, predictions from a physical model
  - Write example script for time-of-flight or entanglement distribution SeQUeNCe experiment
+ - Consider adding 1D [Perlin noise](https://dl.acm.org/doi/10.1145/566654.566636) option for jitter modeling (current model only samples a Gaussian at a user-defined or feature-derived stdev and mean)
  - Look into [pdoc](https://pdoc.dev/) for generating code documentation
     - Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)
 

@@ -88,6 +88,17 @@ class StandaloneEngine:
         model = self.session.require_model()
         dataset = self.session.require_dataset()
 
+        # BEGIN DEBUG
+        if not self.session.feature_bindings.mapping:
+            cols = set(str(c) for c in dataset.df.columns)
+            if "temperature" in cols:
+                self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temperature"})
+            elif "temperature_x" in cols:
+                self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temperature_x"})
+            elif "temp_C" in cols:
+                self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temp_C"})
+        # END DEBUG
+
         self.controls.stop_event.clear()
         self.controls.running = True
 

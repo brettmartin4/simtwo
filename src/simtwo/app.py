@@ -7,6 +7,8 @@ from simtwo.core.backends.sequence_experiment_backend import SequenceBackend
 from simtwo.core.backends.standalone_channel_backend import StandaloneBackend
 from simtwo.core.SimulatorAdapter import SimulatorAdapter
 
+from simtwo.core.backends.gui_backend import build_sequence_gui_backend, build_standalone_gui_backend
+
 
 def load_experiment_from_script(script_path: str):
 
@@ -18,26 +20,40 @@ def load_experiment_from_script(script_path: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
+    # Add updated path for new sructure:
+    if hasattr(module, "build_plugin"):
+        return "plugin", module.build_plugin()
+    if hasattr(module, "PLUGIN"):
+        return "plugin", module.PLUGIN
+
+
+    # new returns include strings for type (tentatively calling old setup legacy for easy remembering)
     if hasattr(module, "build_sim"):
-        return module.build_sim()
-
+        return "legacy_sim", module.build_sim()
     if hasattr(module, "SIM"):
-        return module.SIM
+        return "legacy_sim", module.SIM
 
-    raise RuntimeError("Experiment script must define either build_sim() func or SIM obj")
+    raise RuntimeError("Experiment script must define either build_sim() func or SIM obj or build_plugin() or PLUGIN")
 
 
 def build_backend(mode: str, experiment: str | None = None):
 
     if mode == "sequence":
         if experiment:
-            raw_sim = load_experiment_from_script(experiment)
+            kind, raw_sim = load_experiment_from_script(experiment)
+
+            if kind == "plugin":
+                return build_sequence_gui_backend()
+            elif kind == "legacy_sim":
+                return SequenceBackend(raw_sim)
+
         else:
             raw_sim = SimulatorAdapter()
-        return SequenceBackend(raw_sim)
+            return SequenceBackend(raw_sim)
 
-    if mode == "standalone":
-        return StandaloneBackend()
+    elif mode == "standalone":
+        #return StandaloneBackend()
+        return build_standalone_gui_backend()
 
     raise ValueError(f"Unknown mode: {mode}")
 

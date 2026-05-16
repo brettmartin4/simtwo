@@ -63,6 +63,7 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
 
     if xs and ys:
         draw_line_plot(app.plot_label, xs, ys, size=(plot_width, 300))
+
     else:
         imgui.spacing()
         imgui.text_disabled("No model prediction data to display yet.")

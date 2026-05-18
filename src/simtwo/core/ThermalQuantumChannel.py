@@ -50,3 +50,8 @@ class ThermalQuantumChannel(QuantumChannel):
 
         # Important:
         self._refresh_channel_params()
+
+    # Adde3d so this works with BK protocol
+    def set_effective_distance(self, distance_m: float):
+        self.distance = float(distance_m)
+        self._refresh_channel_params()

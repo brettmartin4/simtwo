@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 from pathlib import Path
+import sys
 
 from simtwo.core.ui.main_window import run_app
 from simtwo.core.backends.sequence_experiment_backend import SequenceBackend
@@ -13,11 +14,15 @@ from simtwo.core.backends.gui_backend import build_sequence_gui_backend, build_s
 def load_experiment_from_script(script_path: str):
 
     path = Path(script_path).resolve()
-    spec = importlib.util.spec_from_file_location("simtwo_user_experiment", path)
+    module_name = "simtwo_user_experiment"
+    spec = importlib.util.spec_from_file_location(module_name, path)
 
     # TODO: error check for file existence here?
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Can't load experiment script: {path}")
 
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module # register first to avoid error
     spec.loader.exec_module(module)
 
     # Add updated path for new sructure:

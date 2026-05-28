@@ -3,7 +3,7 @@ from sequence.components.optical_channel import QuantumChannel
 
 class ThermalQuantumChannel(QuantumChannel):
     """
-    QuantumChannel with temperature-dependent effective fiber length via thermal expansion.
+    QuantumChannel with temperature-dependent effective fiber length via thermal expansion
     """
     def __init__(self, name, timeline, base_distance_m, alpha_per_C=5e-7, T0_C=20.0, **kwargs):
         super().__init__(name=name, timeline=timeline, distance=base_distance_m, **kwargs)
@@ -15,15 +15,16 @@ class ThermalQuantumChannel(QuantumChannel):
 
     def init(self) -> None:
         """
-        Called by the SeQUeNCe Timeline during tl.init().
-        This ensures the channel starts with the delay corresponding to current_T_C.
+        called by sequence Timeline during tl.init()
+        ensures the channel starts with delay corresponding to current_T_C
         """
         self.distance = self._expanded_distance(self.current_T_C)
         self._refresh_channel_params()
 
     def _expanded_distance(self, T_C: float) -> float:
         """
-        # L(T) = L0 * (1 + alpha*(T - T0))
+        # L(T) = L0 * (1 + alpha*(T - T0)) 
+        TODO: Include offset?
         """
         return self.base_distance_m * (
             1.0 + self.alpha_per_C * (float(T_C) - self.T0_C)
@@ -31,8 +32,8 @@ class ThermalQuantumChannel(QuantumChannel):
 
     def _refresh_channel_params(self):
         """
-        Recompute cached SeQUeNCe channel parameters that depend on distance.
-        QuantumChannel.transmit() apparently uses self.delay directly, not self.distance.
+        recompute cache sequence channel params that depend on distance
+        QuantumChannel.transmit() apparently uses self.delay directly, not self.distance
         """
         self.delay = round(self.distance / self.light_speed)
 
@@ -41,8 +42,8 @@ class ThermalQuantumChannel(QuantumChannel):
 
     def set_temperature(self, T_C: float):
         """
-        Update fiber distance and cached propagation delay for future transmissions.
-        Updated to actually impact delay and loss (was not doing this previously)
+        Update fiber len and cache prop delay for future sends
+        (updated to actually impact delay and loss (was not doing this previously))
         """
         self.current_T_C = float(T_C)
 

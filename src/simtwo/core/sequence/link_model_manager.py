@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,9 @@ class LinkGroup:
 
 class LinkModelManager:
     """
-    Owns the active GUI-selected model and applies its predicted delay/distance to registered sequence channels
+    owns cur active GUI model and applies pred fullpath delay/distance to sequence channels
+
+
     """
 
     def __init__(self, *, base_distance_m: float, alpha_per_c: float, t0_c: float, light_speed_m_per_ps: float):
@@ -29,12 +31,13 @@ class LinkModelManager:
         self.model_config = None
         self.model_bundle: dict[str, Any] | None = None
         self.model_name = "default_physical_model"
+
         self.link_groups: list[LinkGroup] = []
 
     def reset_groups(self):
         self.link_groups = []
 
-    def register_group(self, name: str, channels: list[Any], *, delay_fraction: float = 1.0, distance_fraction: float = 1.0):
+    def register_group(self, name: str, channels: list[Any], *,  delay_fraction: float = 1.0, distance_fraction: float = 1.0):
         self.link_groups.append(
             LinkGroup(
                 name=name,
@@ -56,13 +59,14 @@ class LinkModelManager:
         if config.mode == "existing":
             if not config.model_path:
                 raise RuntimeError("Choose a trained model file before loading it.")
+
             self.model_bundle = load_trained_model_bundle(config.model_path)
             self.model_name = self.model_bundle.get("model_name", Path(config.model_path).stem)
             return
 
         raise RuntimeError(
-            "Sequence-mode training for new models is not implemented yet. "
-            "Use default or existing model."
+            "Sequence mode training for new models not implemented yet "
+            "Use default physical model or existing traind model."
         )
 
     def _get_temperature(self, row: dict[str, Any]) -> float:
@@ -70,7 +74,7 @@ class LinkModelManager:
             if key in row:
                 return float(row[key])
         raise RuntimeError(
-            "Dataset row must contain one of: temperature_x, temperature, temp_C, temp."
+            "Dataset row must contain one of: temperature_x, temperature, temp_C, temp."#change later to be dynamic?
         )
 
     def _predict_full_path(self, row: dict[str, Any]) -> tuple[float, float, float, float | None]:
@@ -132,7 +136,6 @@ class LinkModelManager:
     def apply_to_registered_links(self, row: dict[str, Any]) -> dict[str, Any]:
         full_delay_ps, full_delay_ns, full_delay_s, full_distance_m = self._predict_full_path(row)
 
-        # If the model gives only delay, derive the corresponding full-path distance
         if full_distance_m is None:
             full_distance_m = full_delay_ps * self.light_speed_m_per_ps
 
@@ -141,17 +144,13 @@ class LinkModelManager:
             group_distance_m = full_distance_m * group.distance_fraction
 
             for ch in group.channels:
-                # Supports direct effective-distance update
                 if hasattr(ch, "set_effective_distance"):
                     ch.set_effective_distance(group_distance_m)
-                    continue
-
-                # Thermal channels already made :^)
-                if hasattr(ch, "distance"):
-                    ch.distance = float(group_distance_m)
-
-                if hasattr(ch, "delay"):
-                    ch.delay = int(round(group_delay_ps))
+                else:
+                    if hasattr(ch, "distance"):
+                        ch.distance = float(group_distance_m)
+                    if hasattr(ch, "delay"):
+                        ch.delay = int(round(group_delay_ps))
 
                 if hasattr(ch, "loss") and hasattr(ch, "attenuation"):
                     ch.loss = 1 - 10 ** (ch.distance * ch.attenuation / -10)

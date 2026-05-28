@@ -7,8 +7,10 @@ class ThermalClassicalChannel(ClassicalChannel):
     I'm fairly certain not having this was what was giving me grief with the BK protocol in the ED demo.
     """
 
-    def __init__(self, name, timeline, base_distance_m, alpha_per_C=5e-7, T0_C=20.0, **kwargs):
-        super().__init__(name=name, timeline=timeline, distance=base_distance_m, **kwargs)
+    def __init__(self, name, timeline, base_distance_m, alpha_per_C=5e-7, T0_C=20.0, light_speed=None, **kwargs):
+        # Do NOT forward light_speed into ClassicalChannel.__init__()
+        super().__init__(name=name, timeline=timeline, distance=base_distance_m)
+        
         self.base_distance_m = float(base_distance_m)
         self.alpha_per_C = float(alpha_per_C)
         self.T0_C = float(T0_C)

@@ -39,6 +39,7 @@ Lorem ipsum.
 
  - ~~Migrate code from private repo here~~
  - ~~Finish and load test notebook for data processing suite~~
+ - Convert jupyter notebooks to [Marimo](https://marimo.io/)
  - Complete modeling suite functionality
     - Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)
  - Validate modeling code with another notebook + load
@@ -51,7 +52,7 @@ Lorem ipsum.
  - Consider adding 1D [Perlin noise](https://dl.acm.org/doi/10.1145/566654.566636) option for jitter modeling (current model only samples a Gaussian at a user-defined or feature-derived stdev and mean)
  - For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere
  - Look into [pdoc](https://pdoc.dev/) for generating code documentation
-    - Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)
- - Add filedialpy to toml
+    - ~~Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)~~
+ - ~~Add filedialpy to toml~~
 
 [^simtwo]: <sub>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour will begin upon completion of this project.</sub>

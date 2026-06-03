@@ -17,51 +17,43 @@ from simtwo.core.sequence.scheduler import SequenceExperimentScheduler
 @dataclass
 class GuiTwoNodeEntanglementDistribution:
     """
-    Two-node entanglement distribution experiment for Simtwo.
-
-    This version:
-      - builds the topology once per GUI Start
-      - schedules model-driven link updates for every row
-      - only issues an entanglement request every N rows
-      - keeps plotting cumulative success percentage
+    2 node entanglement distribution experiment for Simtwo demo
     """
 
-    attempts: int = 100
+    attempts = 100
 
-    # Physical baseline used by the Simtwo default model
-    base_distance_m: float = 64_000.0
-    alpha_per_c: float = 5e-7
-    t0_c: float = 19.995
-    light_speed_m_per_ps: float = 0.0002
+    # Physical baseline used by Simtwo default model
+    base_distance_m = 64_000.0
+    alpha_per_c = 5e-7
+    t0_c = 19.995
+    light_speed_m_per_ps = 0.0002
 
-    # Channel / protocol settings
-    qchannel_attenuation: float = 0.0002
-    target_fidelity: float = 0.9
+    # Channel settings
+    qchannel_attenuation = 0.0002
+    target_fidelity = 0.9
 
-    # Keep memory small; do NOT scale with dataset size
-    memo_size: int = 1
+    memo_size = 1
 
-    # Within-attempt timing
-    request_start_offset_ps: int = 1_000_000_000
-    request_end_offset_ps: int = 3_000_000_000
+    request_start_offset_ps = 1_000_000_000
+    request_end_offset_ps = 3_000_000_000
 
-    # Space modeled-link updates apart
-    row_spacing_ps: int = 5_000_000_000
+    # space modeled link updates apart
+    row_spacing_ps = 5_000_000_000
 
-    # Only run a full entanglement request every N rows
-    request_every_n_rows: int = 50
+    #only run full entanglement request every N rows
+    request_every_n_rows = 50
 
-    # GUI-facing state expected by the current SequenceBackend
-    observations: list[dict[str, Any]] = field(default_factory=list)
-    current_epoch: int = 0
-    nodes: dict[str, Any] = field(default_factory=lambda: {"A": "A", "B": "B"})
+    # state expected by current SequenceBackend
+    observations = field(default_factory=list)
+    current_epoch = 0
+    nodes = field(default_factory=lambda: {"A": "A", "B": "B"})
 
-    _run_speed_ms: int = 100
-    _stop_evt: threading.Event = field(default_factory=threading.Event)
-    _thread: threading.Thread | None = None
+    _run_speed_ms = 100
+    _stop_evt = field(default_factory=threading.Event)
+    _thread = None
 
-    results_rows: list[dict[str, Any]] = field(default_factory=list)
-    auto_output_csv: str = "gui_two_node_entanglement_results.csv"
+    results_rows = field(default_factory=list)
+    auto_output_csv = "gui_two_node_entanglement_results.csv"
 
     def __post_init__(self):
         if not self.observations:
@@ -81,18 +73,14 @@ class GuiTwoNodeEntanglementDistribution:
             light_speed_m_per_ps=self.light_speed_m_per_ps,
         )
 
-    # ------------------------------------------------------------------
-    # GUI hooks expected by current SequenceBackend
-    # ------------------------------------------------------------------
+    # gui hooks
 
     def set_run_speed(self, value: int):
-        # Option 1 intentionally ignores GUI speed throttling for wall-clock runtime
-        # because tl.run() is one blocking call. Keep the field for compatibility.
+
         self._run_speed_ms = int(value)
 
     def cleanup_after_ids(self):
-        # With Option 1, tl.run() is a single blocking call.
-        # Stop won't interrupt a running timeline cleanly here.
+
         self._stop_evt.set()
 
     def reset_simulation(self):
@@ -125,9 +113,7 @@ class GuiTwoNodeEntanglementDistribution:
     def configure_channel_model(self, config):
         self.link_model_manager.configure(config)
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    # helper funcs
 
     def _write_results_csv(self, file_path: str):
         if not self.results_rows:
@@ -146,11 +132,11 @@ class GuiTwoNodeEntanglementDistribution:
         node_b = QuantumRouter("B", tl, memo_size=self.memo_size)
         node_m = BSMNode("M", tl, [node_a.name, node_b.name])
 
-        # Required by SeQUeNCe reservation rule generation
+        # required by SeQUeNCe reservation rule generation
         node_a.map_to_middle_node[node_b.name] = node_m.name
         node_b.map_to_middle_node[node_a.name] = node_m.name
 
-        # Quantum arms to the middle BSM node
+        # quantum arms to middle BSM node
         qc_a_m = ThermalQuantumChannel(
             "qc_A_M",
             tl,
@@ -176,8 +162,8 @@ class GuiTwoNodeEntanglementDistribution:
         qc_a_m.set_ends(node_a, node_m.name)
         qc_b_m.set_ends(node_b, node_m.name)
 
-        # Classical channels:
-        # A<->B uses full distance
+        # classical channels:
+        # AtoB uses full distance
         cc_a_b = ThermalClassicalChannel(
             "cc_A_B",
             tl,
@@ -197,7 +183,7 @@ class GuiTwoNodeEntanglementDistribution:
         cc_a_b.set_ends(node_a, node_b.name)
         cc_b_a.set_ends(node_b, node_a.name)
 
-        # A<->M and B<->M use half distance
+        # A-M and B-M use half distance
         cc_a_m = ThermalClassicalChannel(
             "cc_A_M",
             tl,
@@ -236,7 +222,7 @@ class GuiTwoNodeEntanglementDistribution:
         cc_b_m.set_ends(node_b, node_m.name)
         cc_m_b.set_ends(node_m, node_b.name)
 
-        # Routing entries required by SeQUeNCe routing layer
+        # routing entries required by sequence routing layer
         routing_a = next(
             p for p in node_a.network_manager.protocol_stack
             if hasattr(p, "forwarding_table")
@@ -251,9 +237,7 @@ class GuiTwoNodeEntanglementDistribution:
 
         return tl, node_a, node_b, node_m, qc_a_m, qc_b_m, cc_a_b, cc_b_a, cc_a_m, cc_m_a, cc_b_m, cc_m_b
 
-    # ------------------------------------------------------------------
-    # Main simulation entry
-    # ------------------------------------------------------------------
+    # main sim code here:
 
     def run_sim(
         self,
@@ -283,7 +267,7 @@ class GuiTwoNodeEntanglementDistribution:
 
             tl.init()
 
-            # Register Simtwo-managed link groups once
+            # reg simtwo link groups once
             self.link_model_manager.reset_groups()
             self.link_model_manager.register_group(
                 "A_to_M",

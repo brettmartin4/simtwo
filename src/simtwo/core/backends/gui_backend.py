@@ -7,8 +7,9 @@ from typing import Any
 import pandas as pd
 
 from simtwo.core.backends.protocol import ChannelModelConfig
-from simtwo.core.modeling.model import fit_model_bundle, save_trained_model_bundle
+from simtwo.core.modeling.model import fit_model_bundle, save_trained_model_bundle, load_trained_model_bundle
 from simtwo.core.models.physical_delay import PhysicalDelayModel
+from simtwo.core.models.polarization_random_walk import RandomWalkPolarizationModel
 from simtwo.core.models.sklearn_delay import SklearnDelayModel
 from simtwo.core.runtime.session import ExecutionControls, FeatureBindings, LoadedDataset, RuntimeSession
 from simtwo.core.sequence.runner import SequenceRunner

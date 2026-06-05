@@ -13,6 +13,7 @@ class UIState:
     times: list[float] = field(default_factory=list)
     conditions: dict[str, Any] = field(default_factory=dict)
     poincare_state: Any = None
+    poincare_states: list[Any] = field(default_factory=list)
 
     run_speed_ms: int = 100
     running: bool = False
@@ -24,5 +25,6 @@ class UIState:
             self.times.clear()
             self.conditions.clear()
             self.poincare_state = None
+            self.poincare_states.clear()
             self.running = False
             self.status = ""

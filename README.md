@@ -1,6 +1,6 @@
 # Simulator 2 (Simtwo) [^simtwo]
 
-### Quantum channel simulator with standalone GUI and backend support for SeQUeNCe experiment integration
+### Suite of tools for quantum channel modeling with standalone GUI and backend support for SeQUeNCe experiment integration
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fbrettmartin4%2Fsimtwo%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)

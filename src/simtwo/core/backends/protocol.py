@@ -12,6 +12,8 @@ PoincareCallback = Callable[[Any], None]
 class ChannelModelConfig:
     # either "default", "existing", or "new":
     mode: str
+    # either "timing" or "polarization"; the UI requires this before activation
+    model_family: str = ""
     model_path: str = ""
     model_name: str = "my_model"
     epochs: int = 50

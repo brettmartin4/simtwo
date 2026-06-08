@@ -88,8 +88,11 @@ class StandaloneEngine:
         model = self.session.require_model()
         dataset = self.session.require_dataset()
 
-        # BEGIN DEBUG
-        if not self.session.feature_bindings.mapping:
+        # If the user is still on the default timing model and no explicit binding
+        # has been set, infer the temperature column.  Polarization models may
+        # intentionally use no feature bindings, so only do this for timing models.
+        model_family = str(getattr(model, "model_family", "timing")).strip().lower()
+        if model_family == "timing" and not self.session.feature_bindings.mapping:
             cols = set(str(c) for c in dataset.df.columns)
             if "temperature" in cols:
                 self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temperature"})
@@ -97,7 +100,6 @@ class StandaloneEngine:
                 self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temperature_x"})
             elif "temp_C" in cols:
                 self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temp_C"})
-        # END DEBUG
 
         self.controls.stop_event.clear()
         self.controls.running = True
@@ -114,30 +116,44 @@ class StandaloneEngine:
 
                 features = self.session.feature_bindings.extract(row)
                 pred: DelayPrediction = model.predict(features)
+                plot_value = self._prediction_plot_value(pred)
 
                 result = {
                     "epoch": idx,
                     **row,
                     "current_model": self.session.current_model_name,
+                    "model_family": pred.model_family,
+                    "target_name": pred.target_name,
+                    "predicted_value": plot_value,
                     "predicted_path_delay_ps": pred.path_delay_ps,
                     "predicted_path_delay_ns": pred.path_delay_ns,
                     "predicted_path_delay_s": pred.path_delay_s,
                     "distance_m": pred.distance_m,
                 }
+                if pred.stokes_vector is not None:
+                    result["S1"] = pred.stokes_vector[0]
+                    result["S2"] = pred.stokes_vector[1]
+                    result["S3"] = pred.stokes_vector[2]
                 self.session.results.append(result)
 
                 conds = {
                     "current_model": self.session.current_model_name,
+                    "model_family": pred.model_family,
                     **features,
-                    "predicted_path_delay_ns": pred.path_delay_ns,
-                    "predicted_path_delay_s": pred.path_delay_s,
+                    "predicted_value": plot_value,
                 }
+                if pred.path_delay_ns is not None:
+                    conds["predicted_path_delay_ns"] = pred.path_delay_ns
+                if pred.path_delay_s is not None:
+                    conds["predicted_path_delay_s"] = pred.path_delay_s
+                if pred.metadata:
+                    conds.update(pred.metadata)
 
                 cb_conditions(conds)
-                cb_plot(idx, pred.path_delay_s)
+                cb_plot(idx, plot_value)
 
                 if cb_poincare is not None:
-                    cb_poincare(None)
+                    cb_poincare(pred.poincare_state)
 
                 time.sleep(max(0.0, self.controls.step_delay_ms / 1000.0))
 
@@ -150,7 +166,6 @@ class StandaloneEngine:
         self._thread.start()
 
     def stop(self):
-
         self.controls.stop_event.set()
         self.controls.running = False
         if self._thread and self._thread.is_alive():
@@ -159,6 +174,12 @@ class StandaloneEngine:
 
     def reset(self):
         self.stop()
+        model = self.session.active_model
+        if model is not None and hasattr(model, "reset"):
+            try:
+                model.reset()
+            except Exception:
+                pass
         self.session.reset_results()
         self.controls.restart_requested = False
 
@@ -166,8 +187,25 @@ class StandaloneEngine:
         if not self.session.results:
             return
 
-        fieldnames = list(self.session.results[0].keys())
+        fieldnames: list[str] = []
+        for row in self.session.results:
+            for key in row.keys():
+                if key not in fieldnames:
+                    fieldnames.append(key)
+
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.session.results)
+
+    @staticmethod
+    def _prediction_plot_value(pred: DelayPrediction) -> float:
+        if pred.plot_value is not None and np.isfinite(pred.plot_value):
+            return float(pred.plot_value)
+        if pred.path_delay_s is not None and np.isfinite(pred.path_delay_s):
+            return float(pred.path_delay_s)
+        if pred.path_delay_ns is not None and np.isfinite(pred.path_delay_ns):
+            return float(pred.path_delay_ns)
+        if pred.path_delay_ps is not None and np.isfinite(pred.path_delay_ps):
+            return float(pred.path_delay_ps)
+        return 0.0

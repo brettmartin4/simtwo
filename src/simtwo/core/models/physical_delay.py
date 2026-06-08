@@ -28,6 +28,7 @@ class PhysicalDelayModel:
     jitter_std_ps: float = 2.0
     seed: int = 42
     name: str = "default_physical_model"
+    model_family: str = "timing"
 
     _rng: np.random.Generator = field(init=False)
 
@@ -53,7 +54,12 @@ class PhysicalDelayModel:
             path_delay_ns=delay_ns,
             path_delay_s=delay_s,
             distance_m=distance_m,
+            plot_value=delay_s,
+            plot_label="Predicted propagation delay (s)",
+            model_family="timing",
+            target_name="path_delay_s",
             metadata={
+                "model_family": "timing",
                 "temperature": temp_c,
                 "base_delay_ps": base_delay_ps,
                 "jitter_ps": jitter_ps,

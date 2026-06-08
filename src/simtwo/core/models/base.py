@@ -6,11 +6,22 @@ from typing import Any, Protocol
 
 @dataclass
 class DelayPrediction:
-    path_delay_ps: float
-    path_delay_ns: float
-    path_delay_s: float
+    """Generic model output used by GUI at runtime (before model is loaded)"""
+    path_delay_ps: float | None = None
+    path_delay_ns: float | None = None
+    path_delay_s: float | None = None
     distance_m: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    # basic observer view vars
+    plot_value: float | None = None
+    plot_label: str = "Model output"
+    model_family: str = "timing"
+    target_name: str | None = None
+
+    # Polarization / Poincare sphere vars
+    stokes_vector: tuple[float, float, float] | None = None
+    poincare_state: Any = None
 
 
 class DelayModel(Protocol):

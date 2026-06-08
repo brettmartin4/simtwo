@@ -97,6 +97,14 @@ class SimImGuiApp:
         self.target_index: int = -1
         self.new_target_index: int = -1
 
+        # Model family controls whether the observer renders a timing line plot
+        # or a polarization/Poincare sphere.  The first option is intentionally
+        # non-runnable so the user must choose timing or polarization before use.
+        self.model_family_options = ["", "timing", "polarization"]
+        self.model_family_labels = ["<select model family>", "Timing", "Polarization"]
+        self.model_family_idx = 0
+        self.active_model_family = ""
+
         self.model_type_options = ["default model", "existing model", "new model"]
         self.model_type_idx = 0
         self.existing_model_path = ""
@@ -164,6 +172,22 @@ class SimImGuiApp:
     @property
     def selected_model_kind(self) -> str:
         return self.model_kind_keys[self.model_kind_idx]
+
+    @property
+    def selected_model_family(self) -> str | None:
+        if 0 <= self.model_family_idx < len(self.model_family_options):
+            value = self.model_family_options[self.model_family_idx]
+            return value or None
+        return None
+
+    @property
+    def selected_model_family_label(self) -> str:
+        family = self.selected_model_family
+        if family == "timing":
+            return "Timing line plot"
+        if family == "polarization":
+            return "Poincare/Bloch sphere"
+        return "<none selected>"
     
     @property
     def split_test_pct(self) -> int:
@@ -223,8 +247,14 @@ class SimImGuiApp:
             self.ui.conditions = dict(conditions)
 
     def cb_poincare(self, state: Any) -> None:
+        if state is None:
+            return
         with self.ui.lock:
             self.ui.poincare_state = state
+            if hasattr(self.ui, "poincare_states"):
+                self.ui.poincare_states.append(state)
+                if len(self.ui.poincare_states) > 500:
+                    del self.ui.poincare_states[: len(self.ui.poincare_states) - 500]
 
     def _clear_plot_state(self) -> None:
         with self.ui.lock:
@@ -232,23 +262,43 @@ class SimImGuiApp:
             self.ui.times.clear()
             self.ui.conditions.clear()
             self.ui.poincare_state = None
+            if hasattr(self.ui, "poincare_states"):
+                self.ui.poincare_states.clear()
             self.ui.running = False
 
     def _set_plot_label_for_config(self, config: ChannelModelConfig) -> None:
+        family = str(config.model_family or "timing").strip().lower()
+        self.active_model_family = family if family in {"timing", "polarization"} else "timing"
+
+        if self.active_model_family == "polarization":
+            if config.mode == "default":
+                self.plot_label = "Poincare Sphere: Polarization Random Walk"
+                self.current_model_name = "polarization_random_walk"
+            elif config.target_name:
+                self.plot_label = f"Poincare Sphere: Predicted {config.target_name}"
+                self.current_model_name = config.model_name or "polarization_model"
+            else:
+                self.plot_label = "Poincare Sphere: Current Polarization Model"
+                self.current_model_name = config.model_name or "polarization_model"
+            return
+
         if config.mode == "default":
-            self.plot_label = "Photon Travel Time (seconds)"
-            self.current_model_name = "default_channel_model"
+            self.plot_label = "Predicted Propagation Delay (seconds)"
+            self.current_model_name = "default_physical_delay_model"
         elif config.mode == "existing":
-            self.plot_label = "Current Model Output"
+            self.plot_label = f"Predicted {config.target_name}" if config.target_name else "Current Timing Model Output"
             self.current_model_name = config.model_name or "loaded_model"
         elif config.target_name:
             self.plot_label = f"Predicted {config.target_name}"
             self.current_model_name = config.model_name or "trained_model"
         else:
-            self.plot_label = "Current Model Output"
+            self.plot_label = "Current Timing Model Output"
             self.current_model_name = config.model_name or "current_model"
 
     def start(self) -> None:
+        if self.active_model_family not in {"timing", "polarization"}:
+            self.set_status("Select a model family and apply a model before starting the observer view.")
+            return
         self.backend.set_run_speed(self.ui.run_speed_ms)
         self.ui.running = True
         try:
@@ -882,19 +932,27 @@ class SimImGuiApp:
             self.set_status(f"Export failed: {exc}")
 
     def apply_model_config(self, config: ChannelModelConfig) -> None:
+        if config.model_family not in {"timing", "polarization"}:
+            self.set_status("Select a model family first: timing or polarization.")
+            return
         try:
             self.backend.configure_channel_model(config)
             self.backend.reset()
             self._clear_plot_state()
             self._set_plot_label_for_config(config)
-            self.set_status(f"Applied model config '{config.model_name}' ({config.mode})")
+            self.set_status(f"Applied {config.model_family} model config '{config.model_name}' ({config.mode})")
         except Exception as exc:
             self.set_status(f"Model config failed: {exc}")
 
     def train_and_activate_model(self) -> None:
+        family = self.selected_model_family
+        if family is None:
+            self.set_status("Select a model family first: timing or polarization.")
+            return
         train_fraction, validation_fraction, test_fraction = self.current_split_fractions()
         config = ChannelModelConfig(
             mode="new",
+            model_family=family,
             model_name=self.new_model_name.strip() or "my_model",
             epochs=int(self.new_epochs),
             learning_rate=float(self.new_lr),
@@ -920,7 +978,7 @@ class SimImGuiApp:
             self._clear_plot_state()
             self._set_plot_label_for_config(config)
             self.set_status(
-                f"Trained {SUPPORTED_MODEL_KINDS.get(config.model_kind, config.model_kind)} as '{config.model_name}'. "
+                f"Trained {config.model_family} {SUPPORTED_MODEL_KINDS.get(config.model_kind, config.model_kind)} as '{config.model_name}'. "
                 f"Train RMSE={summary.get('train_rmse', float('nan')):.4g}, "
                 f"Val RMSE={summary.get('validation_rmse', float('nan')):.4g}, "
                 f"Test RMSE={summary.get('test_rmse', float('nan')):.4g}"
@@ -1039,7 +1097,7 @@ class SimImGuiApp:
 
 
 def run_app(backend: SimulationBackend) -> None:
-    # TODO: Can probably remove
+    # TODO: Can probably remove since the app won t run without
     if glfw is None or imgui is None or GlfwRenderer is None or GL is None:
         # update: Do I still need these? Or does the toml file ensure that everything is installed? This might be superfluous, if so:
         raise RuntimeError("The ImGui GUI requires 'pyimgui', 'glfw', and 'PyOpenGL'. Install them before running the GUI.")

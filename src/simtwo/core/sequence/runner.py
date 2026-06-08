@@ -60,7 +60,7 @@ class SequenceRunner:
 
                 cb_conditions(result)
 
-                plot_value = result.get("predicted_path_delay_s")
+                plot_value = self._extract_plot_value(result)
                 if plot_value is not None:
                     cb_plot(idx, float(plot_value))
 
@@ -86,6 +86,12 @@ class SequenceRunner:
 
     def reset(self):
         self.stop()
+        model = self.session.active_model
+        if model is not None and hasattr(model, "reset"):
+            try:
+                model.reset()
+            except Exception:
+                pass
         self.session.reset_results()
         self.controls.restart_requested = False
 
@@ -94,8 +100,32 @@ class SequenceRunner:
         if not self.session.results:
             return
 
-        fieldnames = list(self.session.results[0].keys())
+        fieldnames: list[str] = []
+        for row in self.session.results:
+            for key in row.keys():
+                if key not in fieldnames:
+                    fieldnames.append(key)
+
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.session.results)
+
+    @staticmethod
+    def _extract_plot_value(result: dict[str, Any]) -> float | None:
+        for key in (
+            "predicted_value",
+            "plot_value",
+            "predicted_path_delay_s",
+            "path_delay_s",
+            "time_sync_error",
+            "clock_error",
+        ):
+            value = result.get(key)
+            if value is None:
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None

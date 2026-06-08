@@ -43,6 +43,7 @@ def config_to_spec(config: ChannelModelConfig) -> ChannelModelSpec:
         "target_name": config.target_name,
         "source_model_path": config.model_path,
         "model_kind": config.model_kind,
+        "model_family": config.model_family,
     }
     return ChannelModelSpec(name=config.model_name, mode=config.mode, metadata=metadata, params=dict(config.model_params or {}))
 
@@ -261,11 +262,13 @@ def fit_model_bundle(observations: list[dict[str, Any]], config: ChannelModelCon
         "bundle_type": "simtwo_sklearn_model",
         "bundle_version": 1,
         "model_name": config.model_name,
+        "model_family": config.model_family,
         "model_kind": normalize_model_kind(config.model_kind),
         "feature_names": feature_names,
         "target_name": target_name,
         "params": dict(config.model_params or {}),
         "metadata": {
+            "model_family": config.model_family,
             "epochs": int(config.epochs),
             "learning_rate": float(config.learning_rate),
             "n_samples": int(x_arr.shape[0]),

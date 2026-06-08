@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from simtwo.core.backends.protocol import ChannelModelConfig
 from simtwo.core.modeling.model import SUPPORTED_MODEL_KINDS
 from simtwo.core.ui.dialogs import draw_existing_model_picker_window
-from simtwo.core.ui.plots import draw_line_plot
+from simtwo.core.ui.plots import draw_line_plot, draw_poincare_bloch_plot
 
 # caused circular import error when left out:
 if TYPE_CHECKING:
@@ -60,8 +60,13 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
     with app.ui.lock:
         xs = list(app.ui.epochs)
         ys = list(app.ui.times)
+        poincare_states = list(getattr(app.ui, "poincare_states", []))
+        if not poincare_states and getattr(app.ui, "poincare_state", None) is not None:
+            poincare_states = [app.ui.poincare_state]
 
-    if xs and ys:
+    if app.active_model_family == "polarization":
+        draw_poincare_bloch_plot(app.plot_label, poincare_states, size=(plot_width, 360))
+    elif xs and ys:
         draw_line_plot(app.plot_label, xs, ys, size=(plot_width, 300))
 
     else:
@@ -154,6 +159,26 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
     imgui.text("Model Configuration")
     imgui.separator()
 
+    current_family = app.model_family_labels[app.model_family_idx]
+    if imgui.begin_combo("Model Family", current_family):
+        for idx, label in enumerate(app.model_family_labels):
+            selected = idx == app.model_family_idx
+            clicked, _ = imgui.selectable(label, selected)
+            if clicked:
+                app.model_family_idx = idx
+            if selected:
+                imgui.set_item_default_focus()
+        imgui.end_combo()
+
+    if app.selected_model_family is None:
+        imgui.text_disabled("Select timing or polarization before applying a model.")
+    else:
+        imgui.text_disabled(f"Observer mode after activation: {app.selected_model_family_label}")
+
+    imgui.spacing()
+    imgui.separator()
+    imgui.spacing()
+
     current = app.model_type_options[app.model_type_idx]
     if imgui.begin_combo("Model Type", current):
         for idx, label in enumerate(app.model_type_options):
@@ -172,19 +197,24 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
     mode = app._model_type()
     if mode == "default model":
         imgui.text_wrapped(
-            "Uses the backend's default channel model/config. "
-            "No additional settings are required."
+            "Uses the default physical model for timing, or the placeholder random-walk model for polarization."
         )
         imgui.spacing()
         if imgui.button("Apply Default", width=160):
-            app.apply_model_config(
-                ChannelModelConfig(
-                    mode="default",
-                    model_name="default_channel_model",
-                    feature_names=app.selected_feature_names,
-                    target_name=app.selected_target_name,
+            family = app.selected_model_family
+            if family is None:
+                app.set_status("Select a model family first: timing or polarization.")
+            else:
+                default_name = "default_physical_delay_model" if family == "timing" else "polarization_random_walk"
+                app.apply_model_config(
+                    ChannelModelConfig(
+                        mode="default",
+                        model_family=family,
+                        model_name=default_name,
+                        feature_names=app.selected_feature_names,
+                        target_name=app.selected_target_name,
+                    )
                 )
-            )
 
     elif mode == "existing model":
         imgui.text("Load a previously saved trained model bundle.")
@@ -204,12 +234,16 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
 
         imgui.spacing()
         if imgui.button("Load Model", width=160):
-            if not app.existing_model_path:
+            family = app.selected_model_family
+            if family is None:
+                app.set_status("Select a model family first: timing or polarization.")
+            elif not app.existing_model_path:
                 app.set_status("Pick a model file first.")
             else:
                 app.apply_model_config(
                     ChannelModelConfig(
                         mode="existing",
+                        model_family=family,
                         model_path=app.existing_model_path,
                         model_name=os.path.splitext(os.path.basename(app.existing_model_path))[0],
                         feature_names=app.selected_feature_names,
@@ -308,6 +342,7 @@ def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None
                 f"Model: {app.last_training_summary.get('model_name', app.new_model_name)} "
                 f"({SUPPORTED_MODEL_KINDS.get(app.last_training_summary.get('model_kind', ''), app.last_training_summary.get('model_kind', 'unknown'))})"
             )
+            imgui.text(f"Family: {app.last_training_summary.get('model_family', '<unknown>')}")
             imgui.text(f"Target: {app.last_training_summary.get('target_name', '<unknown>')}")
             imgui.text(f"Samples: {app.last_training_summary.get('n_samples', 0)}")
             imgui.text(

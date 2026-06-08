@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from simtwo.core.backends.protocol import ChannelModelConfig
-from simtwo.core.modeling.model import fit_model_bundle, save_trained_model_bundle, load_trained_model_bundle
+from simtwo.core.modeling.model import fit_model_bundle, load_trained_model_bundle, save_trained_model_bundle
 from simtwo.core.models.physical_delay import PhysicalDelayModel
 from simtwo.core.models.polarization_random_walk import RandomWalkPolarizationModel
 from simtwo.core.models.sklearn_delay import SklearnDelayModel
@@ -56,31 +56,48 @@ class GuiRuntimeBackend:
         self.engine.export_results(path)
 
     def configure_channel_model(self, config: ChannelModelConfig) -> None:
+        family = self._normalize_model_family(config.model_family)
         self._channel_model_config = config
         self._active_model_bundle = None
 
-        if self.session.dataset is None:
-            raise RuntimeError("Load a dataset before configuring model.")
-
         if config.mode == "default":
-            self.session.feature_bindings = self._build_default_bindings(self.session.dataset)
-            self.session.set_model(
-                PhysicalDelayModel(
-                    base_distance_m=64_000.0,
-                    alpha_per_c=5e-7,
-                    t0_c=19.995,
-                    light_speed_m_per_ps=0.0002,
-                    jitter_std_ps=2.0,
-                    seed=42,
+            if family == "timing":
+                self.session.set_model(
+                    PhysicalDelayModel(
+                        base_distance_m=64_000.0,
+                        alpha_per_c=5e-7,
+                        t0_c=19.995,
+                        light_speed_m_per_ps=0.0002,
+                        jitter_std_ps=2.0,
+                        seed=42,
+                    )
                 )
-            )
-            return
+                if self.session.dataset is not None:
+                    self.session.feature_bindings = self._build_default_bindings(self.session.dataset)
+                return
+
+            if family == "polarization":
+                self.session.feature_bindings = FeatureBindings(mapping={})
+                self.session.set_model(RandomWalkPolarizationModel(seed=42))
+                return
+
+        if self.session.dataset is None:
+            raise RuntimeError("Load a dataset before configuring a trained or existing model.")
 
         if config.mode == "existing":
             if not config.model_path:
                 raise RuntimeError("Choose a trained model file before loading it.")
 
-            model = SklearnDelayModel.from_path(config.model_path)
+            bundle = load_trained_model_bundle(config.model_path)
+            saved_family = self._normalize_model_family(
+                str(bundle.get("model_family") or bundle.get("metadata", {}).get("model_family") or family)
+            )
+            if saved_family != family:
+                raise RuntimeError(
+                    f"Selected model family is '{family}', but the saved model was marked as '{saved_family}'."
+                )
+
+            model = SklearnDelayModel.from_bundle(bundle, model_family=family)
             self.session.feature_bindings = self._build_bindings_for_features(
                 dataset=self.session.dataset,
                 feature_names=model.feature_names,
@@ -89,12 +106,13 @@ class GuiRuntimeBackend:
             return
 
         if config.mode == "new":
-            # The actual fit happens in train_channel_model iirc
+            #  actual fit happens in train_channel_model
             return
 
         raise RuntimeError(f"Unsupported model mode: {config.mode}")
 
     def train_channel_model(self, config: ChannelModelConfig) -> dict[str, Any]:
+        family = self._normalize_model_family(config.model_family)
         if self.session.dataset is None:
             raise RuntimeError("Load a dataset before training a model.")
 
@@ -102,7 +120,7 @@ class GuiRuntimeBackend:
         bundle = fit_model_bundle(observations, config)
         self._active_model_bundle = bundle
 
-        model = SklearnDelayModel.from_bundle(bundle)
+        model = SklearnDelayModel.from_bundle(bundle, model_family=family)
         self.session.feature_bindings = self._build_bindings_for_features(
             dataset=self.session.dataset,
             feature_names=model.feature_names,
@@ -112,6 +130,7 @@ class GuiRuntimeBackend:
         metadata = dict(bundle.get("metadata", {}))
         metadata["model_name"] = bundle.get("model_name", config.model_name)
         metadata["model_kind"] = bundle.get("model_kind", config.model_kind)
+        metadata["model_family"] = family
         metadata["target_name"] = bundle.get("target_name", config.target_name)
         return metadata
 
@@ -119,6 +138,13 @@ class GuiRuntimeBackend:
         if self._active_model_bundle is None:
             raise ValueError("There is no trained model loaded to save.")
         save_trained_model_bundle(self._active_model_bundle, path)
+
+    @staticmethod
+    def _normalize_model_family(value: str | None) -> str:
+        family = str(value or "").strip().lower()
+        if family not in {"timing", "polarization"}:
+            raise RuntimeError("Select a model family first: timing or polarization.")
+        return family
 
     @staticmethod
     def _infer_time_column(df: pd.DataFrame) -> str:
@@ -138,12 +164,12 @@ class GuiRuntimeBackend:
         if "temp_C" in cols:
             return FeatureBindings(mapping={"temperature": "temp_C"})
         raise RuntimeError(
-            "Default physical model requires one of: temperature, temperature_x, or temp_C."
+            "Default physical timing model requires one of: temperature, temperature_x, or temp_C. "
+            "Use the polarization family if you want the random-walk polarization placeholder."
         )
 
     @staticmethod
     def _build_bindings_for_features(dataset: LoadedDataset, feature_names: list[str]) -> FeatureBindings:
-
         cols = set(str(c) for c in dataset.df.columns)
         mapping: dict[str, str] = {}
 

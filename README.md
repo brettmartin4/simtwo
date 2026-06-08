@@ -40,8 +40,8 @@ Lorem ipsum.
  - ~~Migrate code from private repo here~~
  - ~~Finish and load test notebook for data processing suite~~
  - (5) Convert jupyter notebooks to [Marimo](https://marimo.io/)
- - (1) Complete modeling suite functionality
-    - Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)
+ - ~~(1) Complete modeling suite functionality~~
+    - ~~Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)~~
  - Validate modeling code with another notebook + load
  - (2) Finish applying formatting changes and customization tools to observer mode
     - The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like

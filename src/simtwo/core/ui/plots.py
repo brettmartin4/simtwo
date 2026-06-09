@@ -228,11 +228,15 @@ def _render_qutip_poincare_rgba(vectors: list[tuple[float, float, float]], *, wi
 
     dpi = 100
     fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
-    bloch = Bloch(fig=fig)
-    bloch.title = "Poincare Sphere"
-    bloch.xlabel = ["$S_1$", "$-S_1$"]
-    bloch.ylabel = ["$S_2$", "$-S_2$"]
-    bloch.zlabel = ["$S_3$", "$-S_3$"]
+    axes = fig.add_axes([0.04, 0.03, 0.92, 0.82], projection="3d")
+    bloch = Bloch(fig=fig, axes=axes)
+    bloch.title = ""
+
+    fig.subplots_adjust(left=0.04, right=0.96, bottom=0.04, top=0.60)
+
+    bloch.xlabel = [r"$S_1$", ""]
+    bloch.ylabel = [r"$S_2$", ""]
+    bloch.zlabel = [r"$S_3$", ""]
 
     if len(vectors) > 1:
         xs = [v[0] for v in vectors]
@@ -245,7 +249,7 @@ def _render_qutip_poincare_rgba(vectors: list[tuple[float, float, float]], *, wi
     fig.canvas.draw()
 
     rgba = np.asarray(fig.canvas.buffer_rgba(), dtype=np.uint8).copy()
-    rgba = np.flipud(rgba)
+    #rgba = np.flipud(rgba)
     plt.close(fig)
     return rgba
 

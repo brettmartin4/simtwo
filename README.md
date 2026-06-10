@@ -51,7 +51,7 @@ Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simula
  - (1) Go back to Simtwo 2NED experiment and add results for Simtwo experiment with delay model disabled (to verify that it matches the regular SeQUeNCe experiment results.
  - (2) Finish applying formatting changes and customization tools to observer mode
     - The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like
-       - Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)
+       - ~~Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)~~
     - Allow for selection of y axis value (or values if dual-axis) based on available models (time sync, prop delay, etc)
     - Update Poincare sphere plot to reflect stochastic drift model unless specified by some dropdown
     - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations

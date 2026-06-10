@@ -33,6 +33,8 @@ from simtwo.core.ui.data_processing import (
 from simtwo.core.ui.dialogs import draw_about_popup, draw_csv_headers_window, draw_data_processing_window, draw_import_csv_picker_window, draw_import_format_window
 from simtwo.core.ui.panels import draw_left_panel, draw_menu_bar, draw_model_config_panel, draw_right_panel
 
+from simtwo.core.ui.plots import save_poincare_plot, save_timing_plot
+
 import glfw 
 import imgui 
 import pandas as pd
@@ -159,6 +161,19 @@ class SimImGuiApp:
         self.plot_label = "Photon Travel Time (seconds)"
         self.current_model_name = "default_channel_model"
 
+        # added for image customization (these are just defaults until someone edits them):
+        self.show_plot_settings_popup = False
+        self.timing_plot_title = "Predicted Propagation Delay"
+        self.timing_plot_title_font_size = 18.0
+        self.timing_plot_x_axis_label = "Epoch"
+        self.timing_plot_x_axis_font_size = 13.0
+        self.timing_plot_y_axis_label = "Prediction"
+        self.timing_plot_y_axis_font_size = 13.0
+        self.timing_plot_tick_frequency = 0.0
+        self.timing_plot_tick_font_size = 11.0
+        self.polarization_plot_title = "Poincare Sphere"
+        self.polarization_plot_title_font_size = 18.0
+
     @property
     def selected_feature_names(self) -> list[str]:
         return [name for enabled, name in zip(self.feature_mask, self.csv_headers) if enabled]
@@ -280,6 +295,7 @@ class SimImGuiApp:
             else:
                 self.plot_label = "Poincare Sphere: Current Polarization Model"
                 self.current_model_name = config.model_name or "polarization_model"
+            self.polarization_plot_title = self.plot_label
             return
 
         if config.mode == "default":
@@ -294,6 +310,8 @@ class SimImGuiApp:
         else:
             self.plot_label = "Current Timing Model Output"
             self.current_model_name = config.model_name or "current_model"
+        self.timing_plot_title = self.plot_label
+        self.timing_plot_y_axis_label = config.target_name or "Prediction"
 
     def start(self) -> None:
         if self.active_model_family not in {"timing", "polarization"}:
@@ -930,6 +948,59 @@ class SimImGuiApp:
             self.set_status(f"Exported: {path}")
         except Exception as exc:
             self.set_status(f"Export failed: {exc}")
+
+
+    def save_current_plot(self) -> None:
+        
+        try:
+            if self.active_model_family == "polarization":
+                default_filename = "poincare_plot.png"
+            else:
+                default_filename = "timing_plot.png"
+
+            path = self._ask_save_path(
+                                    title="Save Plot Image",
+                                default_filename=default_filename,
+                            default_extension=".png",
+                        filters=["*.png", "*.pdf", "*.svg", "*"])
+
+            if not path:
+                self.set_status("Plot save cancelled")
+                return
+
+            with self.ui.lock:
+                xs = list(self.ui.epochs)
+                ys = list(self.ui.times)
+                poincare_states = list(getattr(self.ui, "poincare_states", []))
+                if not poincare_states and getattr(self.ui, "poincare_state", None) is not None:
+                    poincare_states = [self.ui.poincare_state]
+
+            if self.active_model_family == "polarization":
+                save_poincare_plot(
+                    path,
+                    poincare_states,
+                    title=self.polarization_plot_title,
+                    title_font_size=self.polarization_plot_title_font_size,
+                )
+            else:
+                save_timing_plot(
+                    path,
+                    xs,
+                    ys,
+                    title=self.timing_plot_title,
+                    title_font_size=self.timing_plot_title_font_size,
+                    x_axis_label=self.timing_plot_x_axis_label,
+                    x_axis_font_size=self.timing_plot_x_axis_font_size,
+                    y_axis_label=self.timing_plot_y_axis_label,
+                    y_axis_font_size=self.timing_plot_y_axis_font_size,
+                    tick_frequency=self.timing_plot_tick_frequency,
+                    tick_font_size=self.timing_plot_tick_font_size,
+                )
+
+            self.set_status(f"Saved plot to: {path}")
+        except Exception as exc:
+            self.set_status(f"Save plot failed with this error: {exc}")
+
 
     def apply_model_config(self, config: ChannelModelConfig) -> None:
         if config.model_family not in {"timing", "polarization"}:

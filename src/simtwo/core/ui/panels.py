@@ -65,16 +65,94 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
             poincare_states = [app.ui.poincare_state]
 
     if app.active_model_family == "polarization":
-        draw_poincare_bloch_plot(app.plot_label, poincare_states, size=(plot_width, 360))
-    elif xs and ys:
-        draw_line_plot(app.plot_label, xs, ys, size=(plot_width, 300))
-
+        draw_poincare_bloch_plot(
+            app.plot_label,
+            poincare_states,
+            size=(plot_width, 360),
+            title=app.polarization_plot_title,
+            title_font_size=app.polarization_plot_title_font_size,
+        )
+    elif app.active_model_family == "timing":
+        draw_line_plot(
+            app.plot_label,
+            xs,
+            ys,
+            size=(plot_width, 300),
+            title=app.timing_plot_title,
+            title_font_size=app.timing_plot_title_font_size,
+            x_axis_label=app.timing_plot_x_axis_label,
+            x_axis_font_size=app.timing_plot_x_axis_font_size,
+            y_axis_label=app.timing_plot_y_axis_label,
+            y_axis_font_size=app.timing_plot_y_axis_font_size,
+            tick_frequency=app.timing_plot_tick_frequency,
+            tick_font_size=app.timing_plot_tick_font_size,
+        )
     else:
         imgui.spacing()
         imgui.text_disabled("No model prediction data to display yet.")
         imgui.text_disabled("Press Start to begin generating predictions.")
 
+    imgui.spacing()
+    if imgui.button("Edit Plot Settings", width=180):
+        app.show_plot_settings_popup = True
+    imgui.same_line()
+    if imgui.button("Save Plot", width=120):
+        app.save_current_plot()
+
+    if app.show_plot_settings_popup:
+        imgui.open_popup("Plot Settings")
+        app.show_plot_settings_popup = False
+    draw_plot_settings_popup(app)
+
     imgui.end_child()
+
+
+# ADDED
+def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
+    
+    opened, _ = imgui.begin_popup_modal("Plot Settings", True)
+    if not opened:
+        return
+
+    if app.active_model_family == "polarization":
+        imgui.text("Polarization Plot")
+        imgui.separator()
+        _, app.polarization_plot_title = imgui.input_text("Title", app.polarization_plot_title, 256)
+        _, app.polarization_plot_title_font_size = imgui.input_float(
+            "Title Font Size", float(app.polarization_plot_title_font_size), 0.0, 0.0, format="%.1f"
+        )
+        app.polarization_plot_title_font_size = max(6.0, float(app.polarization_plot_title_font_size))
+    else:
+        imgui.text("Timing Plot")
+        imgui.separator()
+        _, app.timing_plot_title = imgui.input_text("Title", app.timing_plot_title, 256)
+        _, app.timing_plot_title_font_size = imgui.input_float(
+            "Title Font Size", float(app.timing_plot_title_font_size), 0.0, 0.0, format="%.1f"
+        )
+        _, app.timing_plot_x_axis_label = imgui.input_text("X Axis", app.timing_plot_x_axis_label, 256)
+        _, app.timing_plot_x_axis_font_size = imgui.input_float(
+            "X Axis Font Size", float(app.timing_plot_x_axis_font_size), 0.0, 0.0, format="%.1f"
+        )
+        _, app.timing_plot_y_axis_label = imgui.input_text("Y Axis", app.timing_plot_y_axis_label, 256)
+        _, app.timing_plot_y_axis_font_size = imgui.input_float(
+            "Y Axis Font Size", float(app.timing_plot_y_axis_font_size), 0.0, 0.0, format="%.1f"
+        )
+        _, app.timing_plot_tick_frequency = imgui.input_float(
+            "Tick Frequency (0=auto)", float(app.timing_plot_tick_frequency), 0.0, 0.0, format="%.3f"
+        )
+        _, app.timing_plot_tick_font_size = imgui.input_float(
+            "Tick Font Size", float(app.timing_plot_tick_font_size), 0.0, 0.0, format="%.1f"
+        )
+        app.timing_plot_title_font_size = max(6.0, float(app.timing_plot_title_font_size))
+        app.timing_plot_x_axis_font_size = max(6.0, float(app.timing_plot_x_axis_font_size))
+        app.timing_plot_y_axis_font_size = max(6.0, float(app.timing_plot_y_axis_font_size))
+        app.timing_plot_tick_font_size = max(6.0, float(app.timing_plot_tick_font_size))
+        app.timing_plot_tick_frequency = max(0.0, float(app.timing_plot_tick_frequency))
+
+    imgui.spacing()
+    if imgui.button("Close", width=120):
+        imgui.close_current_popup()
+    imgui.end_popup()
 
 
 def draw_right_panel(app: "SimImGuiApp") -> None:

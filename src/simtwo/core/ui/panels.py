@@ -72,10 +72,11 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
             title_font_size=app.polarization_plot_title_font_size,
         )
     elif app.active_model_family == "timing":
-        target_xs, target_ys, target_column = app.current_timing_target_overlay(xs)
+        plot_xs = app.current_timing_plot_xs(xs)
+        target_xs, target_ys, target_column = app.current_timing_target_overlay(plot_xs)
         draw_line_plot(
             app.plot_label,
-            xs,
+            plot_xs,
             ys,
             size=(plot_width, 300),
             title=app.timing_plot_title,
@@ -95,7 +96,7 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
     else:
         imgui.spacing()
         imgui.text_disabled("No model prediction data to display yet.")
-        imgui.text_disabled("Press Start to begin generating predictions.")
+        imgui.text_disabled("Press Generate after applying a model.")
 
     imgui.spacing()
     if imgui.button("Edit Plot Settings", width=180):
@@ -135,6 +136,18 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
             "Title Font Size", float(app.timing_plot_title_font_size), 0.0, 0.0, format="%.1f"
         )
         _, app.timing_plot_x_axis_label = imgui.input_text("X Axis", app.timing_plot_x_axis_label, 256)
+        # ADDED
+        current_x_source = app.timing_plot_x_axis_labels[app.timing_plot_x_axis_idx]
+        if imgui.begin_combo("X Axis Source", current_x_source):
+            for idx, label in enumerate(app.timing_plot_x_axis_labels):
+                selected = idx == app.timing_plot_x_axis_idx
+                clicked, _ = imgui.selectable(label, selected)
+                if clicked:
+                    app.set_timing_x_axis_idx(idx)
+                if selected:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
+        imgui.text_disabled(app.timing_x_axis_status())
         _, app.timing_plot_x_axis_font_size = imgui.input_float(
             "X Axis Font Size", float(app.timing_plot_x_axis_font_size), 0.0, 0.0, format="%.1f"
         )
@@ -148,7 +161,6 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
         _, app.timing_plot_tick_font_size = imgui.input_float(
             "Tick Font Size", float(app.timing_plot_tick_font_size), 0.0, 0.0, format="%.1f"
         )
-        # ADDED
         target_available, target_status = app.timing_target_overlay_status()
         _, app.timing_plot_show_target = imgui.checkbox(
             "Show Target Values on Right Axis", bool(app.timing_plot_show_target)
@@ -183,19 +195,13 @@ def draw_right_panel(app: "SimImGuiApp") -> None:
     imgui.text("Controls")
     imgui.separator()
 
-    changed, speed = imgui.slider_int("Run speed (ms)", app.ui.run_speed_ms, 0, 100)
-    if changed:
-        app.ui.run_speed_ms = int(speed)
-        app.backend.set_run_speed(app.ui.run_speed_ms)
-
-    if imgui.button("Start", width=160):
-        app.start()
+    if imgui.button("Generate", width=160):
+        app.generate()
     imgui.same_line()
     if imgui.button("Restart", width=160):
         app.restart()
 
-    if imgui.button("Stop", width=330):
-        app.stop()
+    imgui.text_disabled("Generate rebuilds the observer plot in one batch; no playback delay is used.")
 
     imgui.spacing()
     imgui.separator()

@@ -26,12 +26,18 @@ class SequenceRunner:
     _thread: threading.Thread | None = None
 
     def start(self, cb_plot: PlotCallback, cb_conditions: ConditionsCallback, cb_poincare: PoincareCallback | None = None):
-        if self._thread and self._thread.is_alive():
-            return
+        self.stop()
 
         dataset = self.session.require_dataset()
         model = self.session.require_model()
 
+        if model is not None and hasattr(model, "reset"):
+            try:
+                model.reset()
+            except Exception:
+                pass
+
+        self.session.reset_results()
         self.controls.stop_event.clear()
         self.controls.running = True
 
@@ -44,38 +50,44 @@ class SequenceRunner:
         )
         self.plugin.build(ctx)
 
-        def worker():
-            for idx in range(self.session.current_epoch, len(rows)):
-                if self.controls.stop_event.is_set():
-                    break
+        plot_points: list[tuple[int, float]] = []
+        poincare_states: list[Any] = []
+        latest_result: dict[str, Any] = {}
 
-                row = dict(rows[idx])
-                row.setdefault("epoch", idx)
-                self.session.current_epoch = idx
+        for idx, source_row in enumerate(rows):
+            if self.controls.stop_event.is_set():
+                break
 
-                result = dict(self.plugin.step(ctx, row) or {})
-                result.setdefault("epoch", idx)
-                result.setdefault("current_model", self.session.current_model_name)
-                self.session.results.append(result)
+            row = dict(source_row)
+            row.setdefault("epoch", idx)
+            self.session.current_epoch = idx
 
-                cb_conditions(result)
+            result = dict(self.plugin.step(ctx, row) or {})
+            result.setdefault("epoch", idx)
+            result.setdefault("current_model", self.session.current_model_name)
+            self.session.results.append(result)
+            latest_result = result
 
-                plot_value = self._extract_plot_value(result)
-                if plot_value is not None:
-                    cb_plot(idx, float(plot_value))
+            plot_value = self._extract_plot_value(result)
+            if plot_value is not None:
+                plot_points.append((idx, float(plot_value)))
 
-                if cb_poincare is not None:
-                    cb_poincare(result.get("poincare_state"))
+            state = result.get("poincare_state")
+            if state is not None:
+                poincare_states.append(state)
 
-                time.sleep(max(0.0, self.controls.step_delay_ms / 1000.0))
+        if not self.controls.stop_event.is_set():
+            self.session.current_epoch = len(rows)
 
-            if not self.controls.stop_event.is_set():
-                self.session.current_epoch = len(rows)
+        if latest_result:
+            cb_conditions(latest_result)
+        for idx, plot_value in plot_points:
+            cb_plot(idx, plot_value)
+        if cb_poincare is not None:
+            for state in poincare_states:
+                cb_poincare(state)
 
-            self.controls.running = False
-
-        self._thread = threading.Thread(target=worker, daemon=True)
-        self._thread.start()
+        self.controls.running = False
 
     def stop(self):
         self.controls.stop_event.set()

@@ -175,6 +175,9 @@ class SimImGuiApp:
         self.timing_plot_show_target = False
         self.timing_plot_target_y_axis_label = "Target Values"
         self.timing_plot_target_y_axis_font_size = 13.0
+        self.timing_plot_x_axis_options = ["epoch", "posix_time"]
+        self.timing_plot_x_axis_labels = ["Index / Epoch", "POSIX Time"]
+        self.timing_plot_x_axis_idx = 0
         self.active_target_name = ""
         self.polarization_plot_title = "Poincare Sphere"
         self.polarization_plot_title_font_size = 18.0
@@ -208,6 +211,26 @@ class SimImGuiApp:
         if family == "polarization":
             return "Poincare/Bloch sphere"
         return "<none selected>"
+    
+    @property
+    def selected_timing_x_axis_mode(self) -> str:
+        if 0 <= self.timing_plot_x_axis_idx < len(self.timing_plot_x_axis_options):
+            return self.timing_plot_x_axis_options[self.timing_plot_x_axis_idx]
+        return "epoch"
+
+    # ADDED
+    def default_timing_x_axis_label(self) -> str:
+        if self.selected_timing_x_axis_mode == "posix_time":
+            return "POSIX Time"
+        return "Epoch"
+
+    # ADDED
+    def set_timing_x_axis_idx(self, idx: int) -> None:
+        old_default_labels = {"Epoch", "Index", "Index / Epoch", "POSIX Time"}
+        old_label = str(self.timing_plot_x_axis_label or "")
+        self.timing_plot_x_axis_idx = max(0, min(int(idx), len(self.timing_plot_x_axis_options) - 1))
+        if not old_label.strip() or old_label in old_default_labels:
+            self.timing_plot_x_axis_label = self.default_timing_x_axis_label()
     
     @property
     def split_test_pct(self) -> int:
@@ -323,26 +346,32 @@ class SimImGuiApp:
         if config.target_name:
             self.timing_plot_target_y_axis_label = f"Actual {config.target_name}"
 
-    def start(self) -> None:
+    def generate(self, *, status_prefix: str = "Generated") -> None:
         if self.active_model_family not in {"timing", "polarization"}:
-            self.set_status("Select a model family and apply a model before starting the observer view.")
+            self.set_status("Select a model family and apply a model before generating the observer plot.")
             return
-        self.backend.set_run_speed(self.ui.run_speed_ms)
-        self.ui.running = True
-        try:
-            self.backend.start(self.cb_plot, self.cb_conditions, self.cb_poincare)
-            self.set_status(f"Running in {self.backend.get_mode_name()} mode.")
-        except Exception as exc:
-            self.ui.running = False
-            self.set_status(f"Start failed: {exc}")
 
-    def restart(self) -> None:
         try:
             self.backend.reset()
-            self.ui.reset()
-            self.start()
+            self._clear_plot_state()
+            with self.ui.lock:
+                self.ui.running = True
+            self.backend.start(self.cb_plot, self.cb_conditions, self.cb_poincare)
+            with self.ui.lock:
+                point_count = len(self.ui.poincare_states) if self.active_model_family == "polarization" else len(self.ui.times)
+                self.ui.running = False
+            self.set_status(f"{status_prefix} {point_count} point(s) in {self.backend.get_mode_name()} mode.")
         except Exception as exc:
-            self.set_status(f"Restart failed: {exc}")
+            with self.ui.lock:
+                self.ui.running = False
+            self.set_status(f"Generate failed: {exc}")
+
+    # Keeping this so it doesnt break the other parts of the code (less for me to refactor, lol)
+    def start(self) -> None:
+        self.generate()
+
+    def restart(self) -> None:
+        self.generate(status_prefix="Regenerated")
 
     def stop(self) -> None:
         self.ui.running = False
@@ -951,6 +980,52 @@ class SimImGuiApp:
         if self.observer_datasets:
             return self.observer_datasets[-1]
         return None
+    
+    def _timing_posix_column(self, dataset: ObserverDataset | None = None) -> str:
+        dataset = dataset or self.active_observer_dataset()
+        if dataset is None or dataset.df.empty:
+            return ""
+        for candidate in (POSIX_TIME_COL, "posix_time"):
+            if candidate in dataset.df.columns:
+                series = pd.to_numeric(dataset.df[candidate], errors="coerce")
+                if series.notna().sum() >= 2:
+                    return candidate
+        return ""
+
+    # ADDED
+    def timing_posix_x_available(self) -> bool:
+        return bool(self._timing_posix_column())
+
+    # ADDED
+    def timing_x_axis_status(self) -> str:
+        if self.timing_posix_x_available():
+            dataset = self.active_observer_dataset()
+            column = self._timing_posix_column(dataset)
+            return f"POSIX x-axis available from '{column}' in '{dataset.name}'." if dataset is not None else "POSIX x-axis available."
+        return "No numeric POSIX time feature is available; index/epoch x-axis will be used."
+
+    # ADDED
+    def current_timing_plot_xs(self, epochs: list[int]) -> list[float]:
+        if self.selected_timing_x_axis_mode != "posix_time":
+            return [float(epoch) for epoch in epochs]
+
+        dataset = self.active_observer_dataset()
+        column = self._timing_posix_column(dataset)
+        if dataset is None or not column:
+            return [float(epoch) for epoch in epochs]
+
+        series = pd.to_numeric(dataset.df[column], errors="coerce")
+        xs: list[float] = []
+        for epoch in epochs:
+            try:
+                value = series.iloc[int(epoch)]
+            except Exception:
+                value = float("nan")
+            if pd.notna(value):
+                xs.append(float(value))
+            else:
+                xs.append(float(epoch))
+        return xs
 
     # ADDED
     def _timing_target_column_candidates(self, dataset: ObserverDataset | None = None) -> list[str]:
@@ -1072,10 +1147,11 @@ class SimImGuiApp:
                     title_font_size=self.polarization_plot_title_font_size,
                 )
             else:
-                target_xs, target_ys, target_column = self.current_timing_target_overlay(xs)
+                plot_xs = self.current_timing_plot_xs(xs)
+                target_xs, target_ys, target_column = self.current_timing_target_overlay(plot_xs)
                 save_timing_plot(
                     path,
-                    xs,
+                    plot_xs,
                     ys,
                     title=self.timing_plot_title,
                     title_font_size=self.timing_plot_title_font_size,

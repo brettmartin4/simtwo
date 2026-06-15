@@ -79,8 +79,8 @@ class StandaloneEngine:
         self.session.feature_bindings = FeatureBindings(mapping=mapping)
 
     def start(self, cb_plot: PlotCallback, cb_conditions: ConditionsCallback, cb_poincare: PoincareCallback | None = None):
-        if self._thread and self._thread.is_alive():
-            return
+        
+        self.stop()
 
         if self.session.dataset is None:
             self.session.set_dataset(self._default_dataset())
@@ -101,69 +101,79 @@ class StandaloneEngine:
             elif "temp_C" in cols:
                 self.session.feature_bindings = FeatureBindings(mapping={"temperature": "temp_C"})
 
+        if model is not None and hasattr(model, "reset"):
+            try:
+                model.reset()
+            except Exception:
+                pass
+
+        self.session.reset_results()
         self.controls.stop_event.clear()
         self.controls.running = True
 
         rows = dataset.to_records()
+        plot_points: list[tuple[int, float]] = []
+        poincare_states: list[Any] = []
+        latest_conditions: dict[str, Any] = {}
 
-        def worker():
-            for idx in range(self.session.current_epoch, len(rows)):
-                if self.controls.stop_event.is_set():
-                    break
+        for idx, source_row in enumerate(rows):
+            if self.controls.stop_event.is_set():
+                break
 
-                row = dict(rows[idx])
-                self.session.current_epoch = idx
+            row = dict(source_row)
+            self.session.current_epoch = idx
 
-                features = self.session.feature_bindings.extract(row)
-                pred: DelayPrediction = model.predict(features)
-                plot_value = self._prediction_plot_value(pred)
+            features = self.session.feature_bindings.extract(row)
+            pred: DelayPrediction = model.predict(features)
+            plot_value = self._prediction_plot_value(pred)
 
-                result = {
-                    "epoch": idx,
-                    **row,
-                    "current_model": self.session.current_model_name,
-                    "model_family": pred.model_family,
-                    "target_name": pred.target_name,
-                    "predicted_value": plot_value,
-                    "predicted_path_delay_ps": pred.path_delay_ps,
-                    "predicted_path_delay_ns": pred.path_delay_ns,
-                    "predicted_path_delay_s": pred.path_delay_s,
-                    "distance_m": pred.distance_m,
-                }
-                if pred.stokes_vector is not None:
-                    result["S1"] = pred.stokes_vector[0]
-                    result["S2"] = pred.stokes_vector[1]
-                    result["S3"] = pred.stokes_vector[2]
-                self.session.results.append(result)
+            result = {
+                "epoch": idx,
+                **row,
+                "current_model": self.session.current_model_name,
+                "model_family": pred.model_family,
+                "target_name": pred.target_name,
+                "predicted_value": plot_value,
+                "predicted_path_delay_ps": pred.path_delay_ps,
+                "predicted_path_delay_ns": pred.path_delay_ns,
+                "predicted_path_delay_s": pred.path_delay_s,
+                "distance_m": pred.distance_m,
+            }
+            if pred.stokes_vector is not None:
+                result["S1"] = pred.stokes_vector[0]
+                result["S2"] = pred.stokes_vector[1]
+                result["S3"] = pred.stokes_vector[2]
+            self.session.results.append(result)
 
-                conds = {
-                    "current_model": self.session.current_model_name,
-                    "model_family": pred.model_family,
-                    **features,
-                    "predicted_value": plot_value,
-                }
-                if pred.path_delay_ns is not None:
-                    conds["predicted_path_delay_ns"] = pred.path_delay_ns
-                if pred.path_delay_s is not None:
-                    conds["predicted_path_delay_s"] = pred.path_delay_s
-                if pred.metadata:
-                    conds.update(pred.metadata)
+            latest_conditions = {
+                "current_model": self.session.current_model_name,
+                "model_family": pred.model_family,
+                **features,
+                "predicted_value": plot_value,
+            }
+            if pred.path_delay_ns is not None:
+                latest_conditions["predicted_path_delay_ns"] = pred.path_delay_ns
+            if pred.path_delay_s is not None:
+                latest_conditions["predicted_path_delay_s"] = pred.path_delay_s
+            if pred.metadata:
+                latest_conditions.update(pred.metadata)
 
-                cb_conditions(conds)
-                cb_plot(idx, plot_value)
+            plot_points.append((idx, plot_value))
+            if pred.poincare_state is not None:
+                poincare_states.append(pred.poincare_state)
 
-                if cb_poincare is not None:
-                    cb_poincare(pred.poincare_state)
+        if not self.controls.stop_event.is_set():
+            self.session.current_epoch = len(rows)
 
-                time.sleep(max(0.0, self.controls.step_delay_ms / 1000.0))
+        if latest_conditions:
+            cb_conditions(latest_conditions)
+        for idx, plot_value in plot_points:
+            cb_plot(idx, plot_value)
+        if cb_poincare is not None:
+            for state in poincare_states:
+                cb_poincare(state)
 
-            if not self.controls.stop_event.is_set():
-                self.session.current_epoch = len(rows)
-
-            self.controls.running = False
-
-        self._thread = threading.Thread(target=worker, daemon=True)
-        self._thread.start()
+        self.controls.running = False
 
     def stop(self):
         self.controls.stop_event.set()

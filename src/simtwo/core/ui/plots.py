@@ -99,6 +99,18 @@ def _series_key(values: Sequence[float] | None, precision: int = 6) -> tuple[flo
     return tuple(round(float(value), precision) for value in values)
 
 
+def _matplotlib_series_color(index: int = 1) -> str | None:
+    try:
+        import matplotlib.pyplot as plt
+
+        colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+        if len(colors) > index:
+            return colors[index]
+    except Exception:
+        return None
+    return None
+
+
 # ADDED
 def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float) -> tuple[int | None, int, int]:
     
@@ -312,9 +324,10 @@ def _render_timing_rgba(xs: Sequence[float], ys: Sequence[float], *, width: int,
     has_target = target_xs is not None and target_ys is not None and len(target_xs) >= 2 and len(target_ys) >= 2
     if has_target:
         ax_right = ax.twinx()
-        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, linestyle="--", label=str(target_label))
-        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size))
-        ax_right.tick_params(axis="y", labelsize=float(tick_font_size))
+        target_color = _matplotlib_series_color(1) or "C1"
+        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, color=target_color, label=str(target_label))
+        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size), color=target_color)
+        ax_right.tick_params(axis="y", labelsize=float(tick_font_size), colors=target_color)
         right_handles, right_labels = ax_right.get_legend_handles_labels()
         handles.extend(right_handles)
         labels.extend(right_labels)
@@ -353,7 +366,7 @@ def draw_poincare_bloch_plot(label: str, states: Sequence[Any], size: tuple[floa
     if not vectors:
         imgui.spacing()
         imgui.text_disabled("No polarization state data to display yet.")
-        imgui.text_disabled("Press Start after applying a polarization model.")
+        imgui.text_disabled("Press Generate after applying a polarization model.")
         imgui.end_child()
         return
 
@@ -577,9 +590,10 @@ def save_timing_plot( path: str, xs: Sequence[float], ys: Sequence[float], *, ti
     has_target = target_xs is not None and target_ys is not None and len(target_xs) >= 2 and len(target_ys) >= 2
     if has_target:
         ax_right = ax.twinx()
-        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, linestyle="--", label=str(target_label))
-        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size))
-        ax_right.tick_params(axis="y", labelsize=float(tick_font_size))
+        target_color = _matplotlib_series_color(1) or "C1"
+        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, color=target_color, label=str(target_label))
+        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size), color=target_color)
+        ax_right.tick_params(axis="y", labelsize=float(tick_font_size), colors=target_color)
         right_handles, right_labels = ax_right.get_legend_handles_labels()
         handles.extend(right_handles)
         labels.extend(right_labels)

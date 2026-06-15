@@ -171,6 +171,11 @@ class SimImGuiApp:
         self.timing_plot_y_axis_font_size = 13.0
         self.timing_plot_tick_frequency = 0.0
         self.timing_plot_tick_font_size = 11.0
+        # ADDED
+        self.timing_plot_show_target = False
+        self.timing_plot_target_y_axis_label = "Target Values"
+        self.timing_plot_target_y_axis_font_size = 13.0
+        self.active_target_name = ""
         self.polarization_plot_title = "Poincare Sphere"
         self.polarization_plot_title_font_size = 18.0
 
@@ -285,6 +290,8 @@ class SimImGuiApp:
         family = str(config.model_family or "timing").strip().lower()
         self.active_model_family = family if family in {"timing", "polarization"} else "timing"
 
+        self.active_target_name = str(config.target_name or "").strip()
+
         if self.active_model_family == "polarization":
             if config.mode == "default":
                 self.plot_label = "Poincare Sphere: Polarization Random Walk"
@@ -312,6 +319,9 @@ class SimImGuiApp:
             self.current_model_name = config.model_name or "current_model"
         self.timing_plot_title = self.plot_label
         self.timing_plot_y_axis_label = config.target_name or "Prediction"
+
+        if config.target_name:
+            self.timing_plot_target_y_axis_label = f"Actual {config.target_name}"
 
     def start(self) -> None:
         if self.active_model_family not in {"timing", "polarization"}:
@@ -930,6 +940,85 @@ class SimImGuiApp:
             return dataset.cached_plot_xs, dataset.cached_plot_ys, dataset.cached_x_column, dataset.cached_y_column
 
         return self._build_observer_dataset_cache(dataset)
+    
+    # ADDED
+    def active_observer_dataset(self) -> ObserverDataset | None:
+        if self.csv_path:
+            active_name = os.path.splitext(os.path.basename(self.csv_path))[0]
+            ds = self.observer_dataset_by_name(active_name)
+            if ds is not None:
+                return ds
+        if self.observer_datasets:
+            return self.observer_datasets[-1]
+        return None
+
+    # ADDED
+    def _timing_target_column_candidates(self, dataset: ObserverDataset | None = None) -> list[str]:
+        candidates: list[str] = []
+        for value in (self.active_target_name, self.selected_target_name):
+            if value and value not in candidates:
+                candidates.append(str(value))
+        preferred = [
+            "path_delay",
+            "propagation_delay",
+            "prop_delay",
+            "time_sync_error",
+            "clock_error",
+            "delay",
+            "target",
+        ]
+        for value in preferred:
+            if value not in candidates:
+                candidates.append(value)
+        if dataset is not None and dataset.y_column and dataset.y_column not in candidates:
+            candidates.append(dataset.y_column)
+        return candidates
+
+    # ADDED
+    def _available_timing_target_column(self) -> tuple[ObserverDataset | None, str]:
+        dataset = self.active_observer_dataset()
+        if dataset is None or dataset.df.empty:
+            return None, ""
+        lookup = {str(col).strip().lower(): str(col) for col in dataset.df.columns}
+        for candidate in self._timing_target_column_candidates(dataset):
+            column = lookup.get(str(candidate).strip().lower())
+            if not column:
+                continue
+            series = pd.to_numeric(dataset.df[column], errors="coerce")
+            if series.notna().sum() >= 2:
+                return dataset, column
+        return dataset, ""
+
+    # ADDED
+    def timing_target_overlay_status(self) -> tuple[bool, str]:
+        dataset, column = self._available_timing_target_column()
+        if dataset is None:
+            return False, "Load a dataset with a numeric target column to enable target overlay."
+        if column:
+            return True, f"Target overlay available from '{column}' in '{dataset.name}'."
+        if self.active_target_name:
+            return False, f"No numeric '{self.active_target_name}' column is available in '{dataset.name}'."
+        return False, f"No numeric timing target column is available in '{dataset.name}'."
+
+    # ADDED
+    def current_timing_target_overlay(self, xs: list[float]) -> tuple[list[float], list[float], str]:
+        if not self.timing_plot_show_target:
+            return [], [], ""
+        dataset, column = self._available_timing_target_column()
+        if dataset is None or not column or len(xs) < 1:
+            return [], [], ""
+        series = pd.to_numeric(dataset.df[column], errors="coerce")
+        count = min(len(xs), len(series))
+        target_xs: list[float] = []
+        target_ys: list[float] = []
+        for idx in range(count):
+            value = series.iloc[idx]
+            if pd.notna(value):
+                target_xs.append(float(xs[idx]))
+                target_ys.append(float(value))
+        if len(target_xs) < 2:
+            return [], [], ""
+        return target_xs, target_ys, column
 
     # Helpers for modeling
     def export_results(self) -> None:
@@ -951,7 +1040,7 @@ class SimImGuiApp:
 
 
     def save_current_plot(self) -> None:
-        
+
         try:
             if self.active_model_family == "polarization":
                 default_filename = "poincare_plot.png"
@@ -983,6 +1072,7 @@ class SimImGuiApp:
                     title_font_size=self.polarization_plot_title_font_size,
                 )
             else:
+                target_xs, target_ys, target_column = self.current_timing_target_overlay(xs)
                 save_timing_plot(
                     path,
                     xs,
@@ -995,6 +1085,11 @@ class SimImGuiApp:
                     y_axis_font_size=self.timing_plot_y_axis_font_size,
                     tick_frequency=self.timing_plot_tick_frequency,
                     tick_font_size=self.timing_plot_tick_font_size,
+                    target_xs=target_xs,
+                    target_ys=target_ys,
+                    target_label=f"Actual {target_column}" if target_column else "Target",
+                    target_y_axis_label=self.timing_plot_target_y_axis_label,
+                    target_y_axis_font_size=self.timing_plot_target_y_axis_font_size,
                 )
 
             self.set_status(f"Saved plot to: {path}")

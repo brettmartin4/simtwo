@@ -9,6 +9,9 @@ from OpenGL import GL
 from qutip import Bloch
 import numpy as np
 import matplotlib
+matplotlib.use("Agg", force=True)
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import math
 
 # ADDED (change all these ADDED bits later based on how everything looks by default in the gui)
@@ -81,96 +84,250 @@ def _build_axis_ticks(vmin: float, vmax: float, frequency: float = 0.0, count: i
     return [vmin + step * i for i in range(count)]
 
 
-def draw_line_plot(label: str, xs: Sequence[float], ys: Sequence[float],size: tuple[float, float] = (700, 260), pad: float = 10.0, *, title: str | None = None, title_font_size: float = 18.0, x_axis_label: str = "Epoch", x_axis_font_size: float = 13.0, y_axis_label: str = "Prediction", y_axis_font_size: float = 13.0, tick_frequency: float = 0.0, tick_font_size: float = 11.0) -> None:
+_TIMING_TEXTURE_CACHE: dict[str, Any] = {
+    "key": None,
+    "texture_id": None,
+    "width": 0,
+    "height": 0,
+}
+
+
+# ADDED
+def _series_key(values: Sequence[float] | None, precision: int = 6) -> tuple[float, ...]:
+    if values is None:
+        return ()
+    return tuple(round(float(value), precision) for value in values)
+
+
+# ADDED
+def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float) -> tuple[int | None, int, int]:
+    
+    width = int(max(256, min(1200, size[0] - 12)))
+    height = int(max(180, min(800, size[1] - 12)))
+    key = (
+        label,
+        width,
+        height,
+        str(title),
+        round(float(title_font_size), 3),
+        str(x_axis_label),
+        round(float(x_axis_font_size), 3),
+        str(y_axis_label),
+        round(float(y_axis_font_size), 3),
+        round(float(tick_frequency or 0.0), 6),
+        round(float(tick_font_size), 3),
+        str(target_label),
+        str(target_y_axis_label),
+        round(float(target_y_axis_font_size), 3),
+        _series_key(xs),
+        _series_key(ys),
+        _series_key(target_xs),
+        _series_key(target_ys),
+    )
+
+    if _TIMING_TEXTURE_CACHE.get("key") == key:
+        return (
+            _TIMING_TEXTURE_CACHE.get("texture_id"),
+            int(_TIMING_TEXTURE_CACHE.get("width") or width),
+            int(_TIMING_TEXTURE_CACHE.get("height") or height),
+        )
+
+    rgba = _render_timing_rgba(
+        xs,
+        ys,
+        width=width,
+        height=height,
+        title=title,
+        title_font_size=title_font_size,
+        x_axis_label=x_axis_label,
+        x_axis_font_size=x_axis_font_size,
+        y_axis_label=y_axis_label,
+        y_axis_font_size=y_axis_font_size,
+        tick_frequency=tick_frequency,
+        tick_font_size=tick_font_size,
+        target_xs=target_xs,
+        target_ys=target_ys,
+        target_label=target_label,
+        target_y_axis_label=target_y_axis_label,
+        target_y_axis_font_size=target_y_axis_font_size,
+    )
+    texture_id = _rgba_to_texture(rgba)
+
+    old_tex = _TIMING_TEXTURE_CACHE.get("texture_id")
+    if old_tex is not None:
+        try:
+            GL.glDeleteTextures([old_tex])
+        except Exception:
+            pass
+
+    _TIMING_TEXTURE_CACHE.update(
+        {
+            "key": key,
+            "texture_id": texture_id,
+            "width": width,
+            "height": height,
+        }
+    )
+    return texture_id, width, height
+
+
+def draw_line_plot(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float] = (700, 260), pad: float = 10.0, *, title: str | None = None, title_font_size: float = 18.0, x_axis_label: str = "Epoch", x_axis_font_size: float = 13.0, y_axis_label: str = "Prediction", y_axis_font_size: float = 13.0, tick_frequency: float = 0.0, tick_font_size: float = 11.0, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> None:
     """
     Uses the window draw list to draw a simple line plot in an ImGui child regio
     """
 
-    _draw_scaled_text(title or label, title_font_size)
+    #_draw_scaled_text(title or label, title_font_size)
     child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_plot"
     imgui.begin_child(child_id, width=size[0], height=size[1], border=True)
 
-    draw_list = imgui.get_window_draw_list()
-    x0, y0 = imgui.get_cursor_screen_pos()
-    w, h = size
+    #draw_list = imgui.get_window_draw_list()
+    #x0, y0 = imgui.get_cursor_screen_pos()
+    #w, h = size
 
-    left_margin = max(68.0, float(tick_font_size) * 4.6)
-    bottom_margin = max(52.0, float(tick_font_size) * 2.4 + float(x_axis_font_size) * 1.4)
-    top_margin = max(18.0, pad)
-    right_margin = max(16.0, pad)
+    #left_margin = max(68.0, float(tick_font_size) * 4.6)
+    #bottom_margin = max(52.0, float(tick_font_size) * 2.4 + float(x_axis_font_size) * 1.4)
+    #top_margin = max(18.0, pad)
+    #right_margin = max(16.0, pad)
 
-    left = x0 + left_margin
-    right = x0 + w - right_margin
-    top = y0 + top_margin
-    bottom = y0 + h - bottom_margin
+    #left = x0 + left_margin
+    #right = x0 + w - right_margin
+    #top = y0 + top_margin
+    #bottom = y0 + h - bottom_margin
 
-    draw_list.add_rect_filled(
-        x0, y0, x0 + w, y0 + h,
-        imgui.get_color_u32_rgba(0.10, 0.10, 0.10, 1.0)
-    )
-    draw_list.add_rect(
-        x0, y0, x0 + w, y0 + h,
-        imgui.get_color_u32_rgba(0.60, 0.60, 0.60, 1.0)
-    )
+    #draw_list.add_rect_filled(
+    #    x0, y0, x0 + w, y0 + h,
+    #    imgui.get_color_u32_rgba(0.10, 0.10, 0.10, 1.0)
+    #)
+    #draw_list.add_rect(
+    #    x0, y0, x0 + w, y0 + h,
+    #    imgui.get_color_u32_rgba(0.60, 0.60, 0.60, 1.0)
+    #)
 
-    if len(xs) >= 2 and len(ys) >= 2 and right > left and bottom > top:
-        xmin, xmax = min(xs), max(xs)
-        ymin, ymax = min(ys), max(ys)
+    #if len(xs) >= 2 and len(ys) >= 2 and right > left and bottom > top:
+    #    xmin, xmax = min(xs), max(xs)
+    #    ymin, ymax = min(ys), max(ys)
 
-        if xmax == xmin:
-            xmax = xmin + 1
-        if ymax == ymin:
-            ymax = ymin + 1e-12
+    #    if xmax == xmin:
+    #        xmax = xmin + 1
+    #    if ymax == ymin:
+    #        ymax = ymin + 1e-12
 
-        def to_screen(x: float, y: float) -> tuple[float, float]:
-            sx = left + (x - xmin) / (xmax - xmin) * (right - left)
-            sy = bottom - (y - ymin) / (ymax - ymin) * (bottom - top)
-            return sx, sy
+    #    def to_screen(x: float, y: float) -> tuple[float, float]:
+    #        sx = left + (x - xmin) / (xmax - xmin) * (right - left)
+    #        sy = bottom - (y - ymin) / (ymax - ymin) * (bottom - top)
+    #        return sx, sy
 
-        draw_list.add_line(
-            left, bottom, right, bottom,
-            imgui.get_color_u32_rgba(0.50, 0.50, 0.50, 1.0), 1.0
-        )
-        draw_list.add_line(
-            left, top, left, bottom,
-            imgui.get_color_u32_rgba(0.50, 0.50, 0.50, 1.0), 1.0
-        )
+    #    draw_list.add_line(
+    #        left, bottom, right, bottom,
+    #        imgui.get_color_u32_rgba(0.50, 0.50, 0.50, 1.0), 1.0
+    #    )
+    #    draw_list.add_line(
+    #        left, top, left, bottom,
+    #        imgui.get_color_u32_rgba(0.50, 0.50, 0.50, 1.0), 1.0
+    #    )
 
         # modified for custom text here:
-        x_ticks = _build_axis_ticks(float(xmin), float(xmax), float(tick_frequency), count=6)
-        y_ticks = _build_axis_ticks(float(ymin), float(ymax), 0.0, count=5)
+    #    x_ticks = _build_axis_ticks(float(xmin), float(xmax), float(tick_frequency), count=6)
+    #    y_ticks = _build_axis_ticks(float(ymin), float(ymax), 0.0, count=5)
 
-        for tick in x_ticks:
-            tx, _ = to_screen(float(tick), ymin)
-            draw_list.add_line(tx, bottom, tx, bottom + 5.0, imgui.get_color_u32_rgba(0.65, 0.65, 0.65, 1.0), 1.0)
-            text = _format_tick(float(tick))
-            _draw_scaled_text_at((tx - len(text) * tick_font_size * 0.18, bottom + 7.0), text, tick_font_size)
+    #    for tick in x_ticks:
+    #        tx, _ = to_screen(float(tick), ymin)
+    #        draw_list.add_line(tx, bottom, tx, bottom + 5.0, imgui.get_color_u32_rgba(0.65, 0.65, 0.65, 1.0), 1.0)
+    #        text = _format_tick(float(tick))
+    #        _draw_scaled_text_at((tx - len(text) * tick_font_size * 0.18, bottom + 7.0), text, tick_font_size)
 
-        for tick in y_ticks:
-            _, ty = to_screen(xmin, float(tick))
-            draw_list.add_line(left - 5.0, ty, left, ty, imgui.get_color_u32_rgba(0.65, 0.65, 0.65, 1.0), 1.0)
-            text = _format_tick(float(tick))
-            _draw_scaled_text_at((x0 + 6.0, ty - tick_font_size * 0.5), text, tick_font_size)
+    #    for tick in y_ticks:
+    #        _, ty = to_screen(xmin, float(tick))
+    #        draw_list.add_line(left - 5.0, ty, left, ty, imgui.get_color_u32_rgba(0.65, 0.65, 0.65, 1.0), 1.0)
+    #        text = _format_tick(float(tick))
+    #        _draw_scaled_text_at((x0 + 6.0, ty - tick_font_size * 0.5), text, tick_font_size)
         # end customtext update
 
-        color = imgui.get_color_u32_rgba(0.20, 0.70, 1.00, 1.0)
-        thickness = 2.0
+    #    color = imgui.get_color_u32_rgba(0.20, 0.70, 1.00, 1.0)
+    #    thickness = 2.0
 
-        for i in range(1, len(xs)):
-            x_a, y_a = to_screen(xs[i - 1], ys[i - 1])
-            x_b, y_b = to_screen(xs[i], ys[i])
-            draw_list.add_line(x_a, y_a, x_b, y_b, color, thickness)
+    #    for i in range(1, len(xs)):
+    #        x_a, y_a = to_screen(xs[i - 1], ys[i - 1])
+    #        x_b, y_b = to_screen(xs[i], ys[i])
+    #        draw_list.add_line(x_a, y_a, x_b, y_b, color, thickness)
 
-        x_label_text = str(x_axis_label)
-        x_label_x = left + (right - left) * 0.5 - len(x_label_text) * float(x_axis_font_size) * 0.18
-        _draw_scaled_text_at((x_label_x, y0 + h - float(x_axis_font_size) - 4.0), x_label_text, x_axis_font_size)
-        _draw_scaled_text_at((x0 + 6.0, y0 + 6.0), str(y_axis_label), y_axis_font_size)
-    else:
-        imgui.set_cursor_screen_pos((x0 + pad, y0 + pad))
+    #    x_label_text = str(x_axis_label)
+    #    x_label_x = left + (right - left) * 0.5 - len(x_label_text) * float(x_axis_font_size) * 0.18
+    #    _draw_scaled_text_at((x_label_x, y0 + h - float(x_axis_font_size) - 4.0), x_label_text, x_axis_font_size)
+    #    _draw_scaled_text_at((x0 + 6.0, y0 + 6.0), str(y_axis_label), y_axis_font_size)
+    #else:
+    #    imgui.set_cursor_screen_pos((x0 + pad, y0 + pad))
+    #    imgui.text("No data yet...")
+
+    #imgui.dummy(w, h)
+
+    if len(xs) < 2 or len(ys) < 2:
+        imgui.spacing()
         imgui.text("No data yet...")
+        imgui.end_child()
+        return
+    
+    tex_id, tex_w, tex_h = _get_or_create_timing_texture(
+            label,
+            xs,
+            ys,
+            size,
+            title=title or label,
+            title_font_size=title_font_size,
+            x_axis_label=x_axis_label,
+            x_axis_font_size=x_axis_font_size,
+            y_axis_label=y_axis_label,
+            y_axis_font_size=y_axis_font_size,
+            tick_frequency=tick_frequency,
+            tick_font_size=tick_font_size,
+            target_xs=target_xs,
+            target_ys=target_ys,
+            target_label=target_label,
+            target_y_axis_label=target_y_axis_label,
+            target_y_axis_font_size=target_y_axis_font_size,
+    )
+    if tex_id is None:
+        raise RuntimeError("Texture creation returned no OpenGL texture.")
+    draw_w = min(float(tex_w), max(64.0, size[0] - 12.0))
+    draw_h = min(float(tex_h), max(64.0, size[1] - 12.0))
+    imgui.image(tex_id, draw_w, draw_h)
 
-    imgui.dummy(w, h)
     imgui.end_child()
+
+
+# ADDED
+def _render_timing_rgba(xs: Sequence[float], ys: Sequence[float], *, width: int, height: int, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float):
+    """
+    This just moves the plot rendering to a separate function to make it look a little cleaner.
+    """
+    dpi = 100
+    fig, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
+    ax.plot(list(xs), list(ys), linewidth=1.8, label="Prediction")
+    ax.set_title(str(title), fontsize=float(title_font_size))
+    ax.set_xlabel(str(x_axis_label), fontsize=float(x_axis_font_size))
+    ax.set_ylabel(str(y_axis_label), fontsize=float(y_axis_font_size))
+    ax.tick_params(axis="both", labelsize=float(tick_font_size))
+
+    handles, labels = ax.get_legend_handles_labels()
+    has_target = target_xs is not None and target_ys is not None and len(target_xs) >= 2 and len(target_ys) >= 2
+    if has_target:
+        ax_right = ax.twinx()
+        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, linestyle="--", label=str(target_label))
+        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size))
+        ax_right.tick_params(axis="y", labelsize=float(tick_font_size))
+        right_handles, right_labels = ax_right.get_legend_handles_labels()
+        handles.extend(right_handles)
+        labels.extend(right_labels)
+
+    if tick_frequency and float(tick_frequency) > 0:
+        ax.xaxis.set_major_locator(MultipleLocator(float(tick_frequency)))
+    if handles:
+        ax.legend(handles, labels, fontsize=max(6.0, float(tick_font_size)))
+    fig.tight_layout()
+    fig.canvas.draw()
+    rgba = np.asarray(fig.canvas.buffer_rgba(), dtype=np.uint8).copy()
+    plt.close(fig)
+    return rgba
 
 
 _POINCARE_TEXTURE_CACHE: dict[str, Any] = {
@@ -313,9 +470,6 @@ def _get_or_create_poincare_texture(vectors: list[tuple[float, float, float]], s
 
 def _render_qutip_poincare_rgba(vectors: list[tuple[float, float, float]], *, width: int, height: int):
 
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt # can probably get rid of this
-
     dpi = 100
     fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
     axes = fig.add_axes([0.04, 0.03, 0.92, 0.82], projection="3d")
@@ -407,24 +561,33 @@ def _draw_poincare_fallback(vectors: list[tuple[float, float, float]], size: tup
 
 
 # ADDED
-def save_timing_plot(path: str, xs: Sequence[float], ys: Sequence[float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float) -> None:
-    
+def save_timing_plot( path: str, xs: Sequence[float], ys: Sequence[float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> None:
+        
     if len(xs) < 2 or len(ys) < 2:
         raise ValueError("No timing plot data is available to save")
 
-    import matplotlib
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-    from matplotlib.ticker import MultipleLocator
-
     fig, ax = plt.subplots(figsize=(9.0, 5.0), dpi=150)
-    ax.plot(list(xs), list(ys), linewidth=1.8)
+    ax.plot(list(xs), list(ys), linewidth=1.8, label="Prediction")
     ax.set_title(str(title), fontsize=float(title_font_size))
     ax.set_xlabel(str(x_axis_label), fontsize=float(x_axis_font_size))
     ax.set_ylabel(str(y_axis_label), fontsize=float(y_axis_font_size))
     ax.tick_params(axis="both", labelsize=float(tick_font_size))
+
+    handles, labels = ax.get_legend_handles_labels()
+    has_target = target_xs is not None and target_ys is not None and len(target_xs) >= 2 and len(target_ys) >= 2
+    if has_target:
+        ax_right = ax.twinx()
+        ax_right.plot(list(target_xs), list(target_ys), linewidth=1.5, linestyle="--", label=str(target_label))
+        ax_right.set_ylabel(str(target_y_axis_label), fontsize=float(target_y_axis_font_size))
+        ax_right.tick_params(axis="y", labelsize=float(tick_font_size))
+        right_handles, right_labels = ax_right.get_legend_handles_labels()
+        handles.extend(right_handles)
+        labels.extend(right_labels)
+
     if tick_frequency and float(tick_frequency) > 0:
         ax.xaxis.set_major_locator(MultipleLocator(float(tick_frequency)))
+    if handles:
+        ax.legend(handles, labels, fontsize=max(6.0, float(tick_font_size)))
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)

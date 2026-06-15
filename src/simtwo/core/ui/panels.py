@@ -4,7 +4,6 @@ import os
 from typing import TYPE_CHECKING
 
 import imgui
-from typing import TYPE_CHECKING
 
 from simtwo.core.backends.protocol import ChannelModelConfig
 from simtwo.core.modeling.model import SUPPORTED_MODEL_KINDS
@@ -73,6 +72,7 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
             title_font_size=app.polarization_plot_title_font_size,
         )
     elif app.active_model_family == "timing":
+        target_xs, target_ys, target_column = app.current_timing_target_overlay(xs)
         draw_line_plot(
             app.plot_label,
             xs,
@@ -86,6 +86,11 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
             y_axis_font_size=app.timing_plot_y_axis_font_size,
             tick_frequency=app.timing_plot_tick_frequency,
             tick_font_size=app.timing_plot_tick_font_size,
+            target_xs=target_xs,
+            target_ys=target_ys,
+            target_label=f"Actual {target_column}" if target_column else "Target",
+            target_y_axis_label=app.timing_plot_target_y_axis_label,
+            target_y_axis_font_size=app.timing_plot_target_y_axis_font_size,
         )
     else:
         imgui.spacing()
@@ -109,7 +114,7 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
 
 # ADDED
 def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
-    
+
     opened, _ = imgui.begin_popup_modal("Plot Settings", True)
     if not opened:
         return
@@ -143,11 +148,28 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
         _, app.timing_plot_tick_font_size = imgui.input_float(
             "Tick Font Size", float(app.timing_plot_tick_font_size), 0.0, 0.0, format="%.1f"
         )
+        # ADDED
+        target_available, target_status = app.timing_target_overlay_status()
+        _, app.timing_plot_show_target = imgui.checkbox(
+            "Show Target Values on Right Axis", bool(app.timing_plot_show_target)
+        )
+        if target_available:
+            imgui.text_disabled(target_status)
+            _, app.timing_plot_target_y_axis_label = imgui.input_text(
+                "Right Y Axis", app.timing_plot_target_y_axis_label, 256
+            )
+            _, app.timing_plot_target_y_axis_font_size = imgui.input_float(
+                "Right Y Axis Font Size", float(app.timing_plot_target_y_axis_font_size), 0.0, 0.0, format="%.1f"
+            )
+        else:
+            app.timing_plot_show_target = False
+            imgui.text_disabled(target_status)
         app.timing_plot_title_font_size = max(6.0, float(app.timing_plot_title_font_size))
         app.timing_plot_x_axis_font_size = max(6.0, float(app.timing_plot_x_axis_font_size))
         app.timing_plot_y_axis_font_size = max(6.0, float(app.timing_plot_y_axis_font_size))
         app.timing_plot_tick_font_size = max(6.0, float(app.timing_plot_tick_font_size))
         app.timing_plot_tick_frequency = max(0.0, float(app.timing_plot_tick_frequency))
+        app.timing_plot_target_y_axis_font_size = max(6.0, float(app.timing_plot_target_y_axis_font_size))
 
     imgui.spacing()
     if imgui.button("Close", width=120):

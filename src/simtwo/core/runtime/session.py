@@ -19,6 +19,11 @@ class LoadedDataset:
 
     def to_records(self) -> list[dict[str, Any]]:
         return self.df.to_dict(orient="records")
+    
+    def iter_records(self):
+        columns = [str(col) for col in self.df.columns]
+        for values in self.df.itertuples(index=False, name=None):
+            yield dict(zip(columns, values))
 
 
 @dataclass

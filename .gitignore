@@ -6,3 +6,5 @@ __pycache__/
 *.py[cod]
 *egg-info*/
 *.zip
+/examples/*.csv
+*.csv

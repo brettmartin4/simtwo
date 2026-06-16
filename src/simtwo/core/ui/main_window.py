@@ -33,7 +33,7 @@ from simtwo.core.ui.data_processing import (
 from simtwo.core.ui.dialogs import draw_about_popup, draw_csv_headers_window, draw_data_processing_window, draw_import_csv_picker_window, draw_import_format_window
 from simtwo.core.ui.panels import draw_left_panel, draw_menu_bar, draw_model_config_panel, draw_right_panel
 
-from simtwo.core.ui.plots import save_poincare_plot, save_timing_plot
+from simtwo.core.ui.plots import create_poincare_plot_texture, create_timing_plot_texture, delete_plot_texture, save_poincare_plot, save_timing_plot
 
 import glfw 
 import imgui 
@@ -182,6 +182,18 @@ class SimImGuiApp:
         self.polarization_plot_title = "Poincare Sphere"
         self.polarization_plot_title_font_size = 18.0
 
+        self.generated_timing_xs: list[float] = []
+        self.generated_timing_ys: list[float] = []
+        self.generated_target_xs: list[float] = []
+        self.generated_target_ys: list[float] = []
+        self.generated_target_column = ""
+        self.generated_poincare_states: list[Any] = []
+        self.observer_plot_texture_id: int | None = None
+        self.observer_plot_texture_width = 0
+        self.observer_plot_texture_height = 0
+        self.observer_plot_message = "Press Generate after applying a model."
+        self.observer_plot_footer = ""
+
     @property
     def selected_feature_names(self) -> list[str]:
         return [name for enabled, name in zip(self.feature_mask, self.csv_headers) if enabled]
@@ -231,6 +243,7 @@ class SimImGuiApp:
         self.timing_plot_x_axis_idx = max(0, min(int(idx), len(self.timing_plot_x_axis_options) - 1))
         if not old_label.strip() or old_label in old_default_labels:
             self.timing_plot_x_axis_label = self.default_timing_x_axis_label()
+        self.clear_generated_plot_texture()
     
     @property
     def split_test_pct(self) -> int:
@@ -308,6 +321,14 @@ class SimImGuiApp:
             if hasattr(self.ui, "poincare_states"):
                 self.ui.poincare_states.clear()
             self.ui.running = False
+        self.generated_timing_xs.clear()
+        self.generated_timing_ys.clear()
+        self.generated_target_xs.clear()
+        self.generated_target_ys.clear()
+        self.generated_target_column = ""
+        self.generated_poincare_states.clear()
+        self.observer_plot_footer = ""
+        self.clear_generated_plot_texture()
 
     def _set_plot_label_for_config(self, config: ChannelModelConfig) -> None:
         family = str(config.model_family or "timing").strip().lower()
@@ -360,11 +381,117 @@ class SimImGuiApp:
             with self.ui.lock:
                 point_count = len(self.ui.poincare_states) if self.active_model_family == "polarization" else len(self.ui.times)
                 self.ui.running = False
+            self.capture_generated_plot_data()
+            self.rebuild_generated_plot_texture()
             self.set_status(f"{status_prefix} {point_count} point(s) in {self.backend.get_mode_name()} mode.")
         except Exception as exc:
             with self.ui.lock:
                 self.ui.running = False
             self.set_status(f"Generate failed: {exc}")
+
+    def clear_generated_plot_texture(self) -> None:
+        if self.observer_plot_texture_id is not None:
+            delete_plot_texture(self.observer_plot_texture_id)
+        self.observer_plot_texture_id = None
+        self.observer_plot_texture_width = 0
+        self.observer_plot_texture_height = 0
+        self.observer_plot_message = "Press Generate after applying a model."
+
+    def capture_generated_plot_data(self) -> None:
+        with self.ui.lock:
+            epochs = list(self.ui.epochs)
+            ys = list(self.ui.times)
+            poincare_states = list(getattr(self.ui, "poincare_states", []))
+            if not poincare_states and getattr(self.ui, "poincare_state", None) is not None:
+                poincare_states = [self.ui.poincare_state]
+
+        self.generated_timing_xs.clear()
+        self.generated_timing_ys.clear()
+        self.generated_target_xs.clear()
+        self.generated_target_ys.clear()
+        self.generated_target_column = ""
+        self.generated_poincare_states = list(poincare_states)
+
+        if self.active_model_family == "timing":
+            self.generated_timing_xs = self.current_timing_plot_xs(epochs)
+            self.generated_timing_ys = ys
+            target_xs, target_ys, target_column = self.current_timing_target_overlay(self.generated_timing_xs)
+            self.generated_target_xs = target_xs
+            self.generated_target_ys = target_ys
+            self.generated_target_column = target_column
+
+    def rebuild_generated_plot_texture(self) -> None:
+        self.clear_generated_plot_texture()
+        try:
+            if self.active_model_family == "polarization":
+                if not self.generated_poincare_states:
+                    self.observer_plot_message = "Press Generate after applying a polarization model."
+                    return
+                texture_id, width, height = create_poincare_plot_texture(
+                    self.generated_poincare_states,
+                    width=700,
+                    height=360,
+                )
+                self.observer_plot_texture_id = texture_id
+                self.observer_plot_texture_width = width
+                self.observer_plot_texture_height = height
+                self.observer_plot_footer = self.current_poincare_footer_text()
+                self.observer_plot_message = ""
+                return
+
+            if self.active_model_family == "timing":
+                if len(self.generated_timing_xs) < 2 or len(self.generated_timing_ys) < 2:
+                    self.observer_plot_message = "Press Generate after applying a timing model."
+                    return
+                texture_id, width, height = create_timing_plot_texture(
+                    self.generated_timing_xs,
+                    self.generated_timing_ys,
+                    width=1100,
+                    height=320,
+                    title=self.timing_plot_title,
+                    title_font_size=self.timing_plot_title_font_size,
+                    x_axis_label=self.timing_plot_x_axis_label,
+                    x_axis_font_size=self.timing_plot_x_axis_font_size,
+                    y_axis_label=self.timing_plot_y_axis_label,
+                    y_axis_font_size=self.timing_plot_y_axis_font_size,
+                    tick_frequency=self.timing_plot_tick_frequency,
+                    tick_font_size=self.timing_plot_tick_font_size,
+                    target_xs=self.generated_target_xs,
+                    target_ys=self.generated_target_ys,
+                    target_label=f"Actual {self.generated_target_column}" if self.generated_target_column else "Target",
+                    target_y_axis_label=self.timing_plot_target_y_axis_label,
+                    target_y_axis_font_size=self.timing_plot_target_y_axis_font_size,
+                )
+                self.observer_plot_texture_id = texture_id
+                self.observer_plot_texture_width = width
+                self.observer_plot_texture_height = height
+                self.observer_plot_footer = ""
+                self.observer_plot_message = ""
+                return
+
+            self.observer_plot_message = "Press Generate after applying a model."
+        except Exception as exc:
+            self.observer_plot_message = f"Plot rendering failed: {exc}"
+
+    def current_poincare_footer_text(self) -> str:
+        if not self.generated_poincare_states:
+            return ""
+        state = self.generated_poincare_states[-1]
+        values: Any = None
+        if isinstance(state, dict):
+            for key in ("stokes", "stokes_vector", "poincare", "bloch"):
+                if key in state:
+                    values = state[key]
+                    break
+            if values is None and all(key in state for key in ("S1", "S2", "S3")):
+                values = [state["S1"], state["S2"], state["S3"]]
+        else:
+            values = state
+        try:
+            s1, s2, s3 = [float(value) for value in list(values)[:3]]
+            return f"S1={s1: .3f}   S2={s2: .3f}   S3={s3: .3f}"
+        except Exception:
+            return ""
 
     # Keeping this so it doesnt break the other parts of the code (less for me to refactor, lol)
     def start(self) -> None:
@@ -1142,17 +1269,15 @@ class SimImGuiApp:
             if self.active_model_family == "polarization":
                 save_poincare_plot(
                     path,
-                    poincare_states,
+                    self.generated_poincare_states or poincare_states,
                     title=self.polarization_plot_title,
                     title_font_size=self.polarization_plot_title_font_size,
                 )
             else:
-                plot_xs = self.current_timing_plot_xs(xs)
-                target_xs, target_ys, target_column = self.current_timing_target_overlay(plot_xs)
                 save_timing_plot(
                     path,
-                    plot_xs,
-                    ys,
+                    self.generated_timing_xs,
+                    self.generated_timing_ys,
                     title=self.timing_plot_title,
                     title_font_size=self.timing_plot_title_font_size,
                     x_axis_label=self.timing_plot_x_axis_label,
@@ -1161,16 +1286,16 @@ class SimImGuiApp:
                     y_axis_font_size=self.timing_plot_y_axis_font_size,
                     tick_frequency=self.timing_plot_tick_frequency,
                     tick_font_size=self.timing_plot_tick_font_size,
-                    target_xs=target_xs,
-                    target_ys=target_ys,
-                    target_label=f"Actual {target_column}" if target_column else "Target",
+                    target_xs=self.generated_target_xs,
+                    target_ys=self.generated_target_ys,
+                    target_label=f"Actual {self.generated_target_column}" if self.generated_target_column else "Target",
                     target_y_axis_label=self.timing_plot_target_y_axis_label,
                     target_y_axis_font_size=self.timing_plot_target_y_axis_font_size,
                 )
 
             self.set_status(f"Saved plot to: {path}")
         except Exception as exc:
-            self.set_status(f"Save plot failed with this error: {exc}")
+            self.set_status(f"Save plot failed: {exc}")
 
 
     def apply_model_config(self, config: ChannelModelConfig) -> None:

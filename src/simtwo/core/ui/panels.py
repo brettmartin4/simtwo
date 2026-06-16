@@ -8,7 +8,7 @@ import imgui
 from simtwo.core.backends.protocol import ChannelModelConfig
 from simtwo.core.modeling.model import SUPPORTED_MODEL_KINDS
 from simtwo.core.ui.dialogs import draw_existing_model_picker_window
-from simtwo.core.ui.plots import draw_line_plot, draw_poincare_bloch_plot
+from simtwo.core.ui.plots import draw_static_plot_texture
 
 # caused circular import error when left out:
 if TYPE_CHECKING:
@@ -56,42 +56,25 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
 
     plot_width = max(240.0, imgui.get_content_region_available_width() - 8.0)
 
-    with app.ui.lock:
-        xs = list(app.ui.epochs)
-        ys = list(app.ui.times)
-        poincare_states = list(getattr(app.ui, "poincare_states", []))
-        if not poincare_states and getattr(app.ui, "poincare_state", None) is not None:
-            poincare_states = [app.ui.poincare_state]
-
+    # ADDED
     if app.active_model_family == "polarization":
-        draw_poincare_bloch_plot(
+        draw_static_plot_texture(
             app.plot_label,
-            poincare_states,
+            app.observer_plot_texture_id,
+            (app.observer_plot_texture_width, app.observer_plot_texture_height),
             size=(plot_width, 360),
             title=app.polarization_plot_title,
             title_font_size=app.polarization_plot_title_font_size,
+            empty_message=app.observer_plot_message,
+            footer_text=app.observer_plot_footer,
         )
     elif app.active_model_family == "timing":
-        plot_xs = app.current_timing_plot_xs(xs)
-        target_xs, target_ys, target_column = app.current_timing_target_overlay(plot_xs)
-        draw_line_plot(
+        draw_static_plot_texture(
             app.plot_label,
-            plot_xs,
-            ys,
+            app.observer_plot_texture_id,
+            (app.observer_plot_texture_width, app.observer_plot_texture_height),
             size=(plot_width, 300),
-            title=app.timing_plot_title,
-            title_font_size=app.timing_plot_title_font_size,
-            x_axis_label=app.timing_plot_x_axis_label,
-            x_axis_font_size=app.timing_plot_x_axis_font_size,
-            y_axis_label=app.timing_plot_y_axis_label,
-            y_axis_font_size=app.timing_plot_y_axis_font_size,
-            tick_frequency=app.timing_plot_tick_frequency,
-            tick_font_size=app.timing_plot_tick_font_size,
-            target_xs=target_xs,
-            target_ys=target_ys,
-            target_label=f"Actual {target_column}" if target_column else "Target",
-            target_y_axis_label=app.timing_plot_target_y_axis_label,
-            target_y_axis_font_size=app.timing_plot_target_y_axis_font_size,
+            empty_message=app.observer_plot_message,
         )
     else:
         imgui.spacing()
@@ -184,7 +167,13 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
         app.timing_plot_target_y_axis_font_size = max(6.0, float(app.timing_plot_target_y_axis_font_size))
 
     imgui.spacing()
+    if imgui.button("Apply", width=120):
+        app.capture_generated_plot_data()
+        app.rebuild_generated_plot_texture()
+    imgui.same_line()
     if imgui.button("Close", width=120):
+        app.capture_generated_plot_data()
+        app.rebuild_generated_plot_texture()
         imgui.close_current_popup()
     imgui.end_popup()
 

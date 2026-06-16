@@ -111,15 +111,16 @@ class StandaloneEngine:
         self.controls.stop_event.clear()
         self.controls.running = True
 
-        rows = dataset.to_records()
+        row_count = 0
         plot_points: list[tuple[int, float]] = []
         poincare_states: list[Any] = []
         latest_conditions: dict[str, Any] = {}
 
-        for idx, source_row in enumerate(rows):
+        for idx, source_row in enumerate(dataset.iter_records()):
             if self.controls.stop_event.is_set():
                 break
 
+            row_count = idx + 1
             row = dict(source_row)
             self.session.current_epoch = idx
 
@@ -163,7 +164,7 @@ class StandaloneEngine:
                 poincare_states.append(pred.poincare_state)
 
         if not self.controls.stop_event.is_set():
-            self.session.current_epoch = len(rows)
+            self.session.current_epoch = row_count
 
         if latest_conditions:
             cb_conditions(latest_conditions)

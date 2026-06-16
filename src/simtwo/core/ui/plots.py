@@ -84,6 +84,86 @@ def _build_axis_ticks(vmin: float, vmax: float, frequency: float = 0.0, count: i
     return [vmin + step * i for i in range(count)]
 
 
+def create_timing_plot_texture(xs: Sequence[float], ys: Sequence[float], *, width: int, height: int, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> tuple[int, int, int]:
+    
+    if len(xs) < 2 or len(ys) < 2:
+        raise ValueError("No timing plot data is available to render.")
+    
+    rgba = _render_timing_rgba(
+        xs,
+        ys,
+        width=int(width),
+        height=int(height),
+        title=title,
+        title_font_size=title_font_size,
+        x_axis_label=x_axis_label,
+        x_axis_font_size=x_axis_font_size,
+        y_axis_label=y_axis_label,
+        y_axis_font_size=y_axis_font_size,
+        tick_frequency=tick_frequency,
+        tick_font_size=tick_font_size,
+        target_xs=target_xs,
+        target_ys=target_ys,
+        target_label=target_label,
+        target_y_axis_label=target_y_axis_label,
+        target_y_axis_font_size=target_y_axis_font_size,
+    )
+
+    return _rgba_to_texture(rgba), int(width), int(height)
+
+
+# ADDED
+def create_poincare_plot_texture(states: Sequence[Any], *, width: int, height: int) -> tuple[int, int, int]:
+
+    vectors = _extract_stokes_vectors(states)
+    if not vectors:
+        raise ValueError("No polarization plot data is available to render.")
+    rgba = _render_qutip_poincare_rgba(vectors, width=int(width), height=int(height))
+
+    return _rgba_to_texture(rgba), int(width), int(height)
+
+
+# ADDED
+def delete_plot_texture(texture_id: int | None) -> None:
+
+    if texture_id is None:
+        return
+    try:
+        GL.glDeleteTextures([int(texture_id)])
+    except Exception:
+        pass
+
+
+# ADDED
+def draw_static_plot_texture(label: str, texture_id: int | None, texture_size: tuple[int, int], size: tuple[float, float], *, title: str | None = None, title_font_size: float = 18.0, empty_message: str = "No plot has been generated yet.", footer_text: str = "") -> None:
+    
+    if title:
+        _draw_scaled_text(title, title_font_size)
+
+    child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_static_texture"
+    imgui.begin_child(child_id, width=size[0], height=size[1], border=True)
+    tex_w, tex_h = int(texture_size[0] or 0), int(texture_size[1] or 0)
+
+    if texture_id is None or tex_w <= 0 or tex_h <= 0:
+        imgui.spacing()
+        imgui.text_disabled(empty_message)
+        imgui.end_child()
+        return
+    
+    avail_w = max(64.0, float(size[0]) - 12.0)
+    avail_h = max(64.0, float(size[1]) - 36.0)
+    scale = min(avail_w / float(tex_w), avail_h / float(tex_h))
+    draw_w = float(tex_w) * scale
+    draw_h = float(tex_h) * scale
+    imgui.image(int(texture_id), draw_w, draw_h)
+
+    if footer_text:
+        imgui.text_unformatted(str(footer_text))
+
+    imgui.end_child()
+
+
+# TODO: delete?
 _TIMING_TEXTURE_CACHE: dict[str, Any] = {
     "key": None,
     "texture_id": None,
@@ -92,7 +172,7 @@ _TIMING_TEXTURE_CACHE: dict[str, Any] = {
 }
 
 
-# ADDED
+# TODO: delete?
 def _series_key(values: Sequence[float] | None, precision: int = 6) -> tuple[float, ...]:
     if values is None:
         return ()
@@ -111,7 +191,7 @@ def _matplotlib_series_color(index: int = 1) -> str | None:
     return None
 
 
-# ADDED
+# TODO: delete?
 def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float) -> tuple[int | None, int, int]:
     
     width = int(max(256, min(1200, size[0] - 12)))
@@ -183,6 +263,7 @@ def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[
     return texture_id, width, height
 
 
+# TODO: delete?
 def draw_line_plot(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float] = (700, 260), pad: float = 10.0, *, title: str | None = None, title_font_size: float = 18.0, x_axis_label: str = "Epoch", x_axis_font_size: float = 13.0, y_axis_label: str = "Prediction", y_axis_font_size: float = 13.0, tick_frequency: float = 0.0, tick_font_size: float = 11.0, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> None:
     """
     Uses the window draw list to draw a simple line plot in an ImGui child regio

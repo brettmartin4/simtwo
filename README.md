@@ -47,22 +47,21 @@ Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simula
 
 # To-do List:
 
- - (0) Validate modeling code with another notebook + load
- - (1) Go back to Simtwo 2NED experiment and add results for Simtwo experiment with delay model disabled (to verify that it matches the regular SeQUeNCe experiment results.
- - (2) Finish applying formatting changes and customization tools to observer mode
-    - The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like
-       - ~~Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)~~
-    - Allow for selection of y axis value (or values if dual-axis) based on available models (time sync, prop delay, etc)
-    - Update Poincare sphere plot to reflect stochastic drift model unless specified by some dropdown
-    - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
-       - Change plot axis selection so either y axis can plot: a variable from the loaded dataset, inference from a loaded model, predictions from a physical model
- - (2.5) Create new Fig 2 for paper using Simtwo output
- - (3) For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere
- - (4) Consider adding 1D [Perlin noise](https://dl.acm.org/doi/10.1145/566654.566636) option for jitter modeling (current model only samples a Gaussian at a user-defined or feature-derived stdev and mean)
- - (5) Convert jupyter notebooks to [Marimo](https://marimo.io/)
- - (6) Generate documentation
+ - (0) Create new Fig 2 for paper using Simtwo output
+ - (1) For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere
+ - (2) Validate modeling code with another notebook + load
+ - (3) Convert jupyter notebooks to [Marimo](https://marimo.io/)
+ - (4) Generate documentation
     - Look into [pdoc](https://pdoc.dev/) for generating code documentation
        - ~~Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)~~
+ - ~~Finish applying formatting changes and customization tools to observer mode~~
+    - ~~The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like~~
+       - ~~Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)~~
+    - ~~Allow for dual axis with observed and preds~~
+    - ~~Update Poincare sphere plot to reflect stochastic drift model unless specified by some dropdown~~
+    - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
+       - Change plot axis selection so either y axis can plot: a variable from the loaded dataset, inference from a loaded model, predictions from a physical model
+ - ~~Consider adding 1D [Perlin noise](https://dl.acm.org/doi/10.1145/566654.566636) option for jitter modeling (current model only samples a Gaussian at a user-defined or feature-derived stdev and mean)~~
  - ~~Migrate code from private repo here~~
  - ~~Finish and load test notebook for data processing suite~~
  - ~~(1) Complete modeling suite functionality~~

@@ -41,6 +41,10 @@ class SimulatorAdapter:
     attenuation_db_per_m: float = 0.0
     light_speed_m_per_ps: float = 0.0002
     jitter_std_ps: float = 5_000_000.0  # 5 us
+    # ADDED
+    jitter_method: str = "default"
+    perlin_step: float = 0.05
+    perlin_amplitude_ps: float | None = None
 
     seed: int = 123
 
@@ -98,6 +102,10 @@ class SimulatorAdapter:
             f.write(f"epochs={len(self.observations)}\n")
             f.write(f"base_distance_m={self.base_distance_m}\n")
             f.write(f"jitter_std_ps={self.jitter_std_ps}\n")
+            # ADDED
+            f.write(f"jitter_method={self.jitter_method}\n")
+            f.write(f"perlin_step={self.perlin_step}\n")
+            f.write(f"perlin_amplitude_ps={self.perlin_amplitude_ps}\n")
 
     # sim entry
     def run_sim(self, sender: Any, receiver: Any, update_plot: Callable[[int, float], None], update_conditions: Callable[[dict[str, Any]], None] | None = None, update_poincare_sphere: Callable[[Any], None] | None = None):
@@ -130,7 +138,8 @@ class SimulatorAdapter:
 
         tl = Timeline()
         alice = Node("A", tl)
-        bob = RxNodeWithJitter("B", tl, rng=self._rng, jitter_std_ps=self.jitter_std_ps)
+        # changed for perlin noiuse args
+        bob = RxNodeWithJitter("B", tl, rng=self._rng, jitter_std_ps=self.jitter_std_ps, jitter_method=self.jitter_method, perlin_step=self.perlin_step, perlin_amplitude_ps=self.perlin_amplitude_ps,)
 
         ch = ThermalQuantumChannel(
             name="qc",

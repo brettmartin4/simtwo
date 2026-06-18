@@ -13,6 +13,15 @@ Features configurable backend support for use with other simulators in the futur
 
 ---
 
+# Highlights
+
+ - Single platform for data processing and modeling for timing and polarization errors
+ - Backend interface for easy extension of quantum networking experiments
+ - Validated on time-of-flight and two-node entanglement distribution in SeQUeNCe
+
+
+---
+
 # Installation
 
 It is recommended to install Simulator 2 from within a virtual environment to avoid problems with mismatched dependency versions. The package can be installed directly from the root project directory (the directory containing this README) using the following command:
@@ -52,7 +61,7 @@ Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simula
  - (2) Validate modeling code with another notebook + load
  - (3) Convert jupyter notebooks to [Marimo](https://marimo.io/)
  - (4) Generate documentation
-    - Look into [pdoc](https://pdoc.dev/) for generating code documentation
+    - Look into [pdoc](https://pdoc.dev/) for generating code documentation (or [Sphinx](https://www.sphinx-doc.org/en/master/index.html) in conjunction with [ReadTheDocs.io](https://www.sphinx-doc.org/en/master/index.html))
        - ~~Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)~~
  - ~~Finish applying formatting changes and customization tools to observer mode~~
     - ~~The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like~~

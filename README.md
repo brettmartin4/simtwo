@@ -8,7 +8,7 @@
 
 Features configurable backend support for use with other simulators in the future.
 
-[Installation](#installation) · [References](#references) · [To Do](#to-do-list)
+[Highlights](#highlights) · [Installation](#installation) · [References](#references) · [To Do](#to-do-list)
 
 
 ---
@@ -52,7 +52,7 @@ To verify how using a dynamic channel module impacts the performance of quantum 
 
 # References
 
-Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending publication (submitted to SoftwareX).
+Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending (submitted to SoftwareX for review).
 
 # To-do List:
 

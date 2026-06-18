@@ -56,7 +56,6 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
 
     plot_width = max(240.0, imgui.get_content_region_available_width() - 8.0)
 
-    # ADDED
     if app.active_model_family == "polarization":
         draw_static_plot_texture(
             app.plot_label,
@@ -68,6 +67,7 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
             empty_message=app.observer_plot_message,
             footer_text=app.observer_plot_footer,
         )
+        draw_polarization_distribution_controls(app)
     elif app.active_model_family == "timing":
         draw_static_plot_texture(
             app.plot_label,
@@ -96,7 +96,38 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
     imgui.end_child()
 
 
-# ADDED
+def draw_polarization_distribution_controls(app: "SimImGuiApp") -> None:
+    
+    count = len(app.generated_poincare_states)
+    imgui.spacing()
+    imgui.text("Polarization Distribution")
+    if count <= 0:
+        imgui.text_disabled("Generate polarization data to enable distribution controls.")
+        return
+
+    app.clamp_polarization_distribution_controls()
+    max_window = max(1, count)
+    changed, window_size = imgui.slider_int(
+        "Distribution Window Size",
+        int(app.polarization_distribution_window_size),
+        1,
+        max_window,
+    )
+    if changed:
+        app.set_polarization_distribution_window_size(window_size)
+
+    max_start = max(0, count - int(app.polarization_distribution_window_size))
+    changed, start_idx = imgui.slider_int(
+        "Starting Observation",
+        int(app.polarization_distribution_start_idx),
+        0,
+        max_start,
+    )
+    if changed:
+        app.set_polarization_distribution_start_idx(start_idx)
+    imgui.text_disabled("Slider changes apply the next time Generate or Restart is pressed.")
+    
+
 def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
 
     opened, _ = imgui.begin_popup_modal("Plot Settings", True)
@@ -119,7 +150,6 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
             "Title Font Size", float(app.timing_plot_title_font_size), 0.0, 0.0, format="%.1f"
         )
         _, app.timing_plot_x_axis_label = imgui.input_text("X Axis", app.timing_plot_x_axis_label, 256)
-        # ADDED
         current_x_source = app.timing_plot_x_axis_labels[app.timing_plot_x_axis_idx]
         if imgui.begin_combo("X Axis Source", current_x_source):
             for idx, label in enumerate(app.timing_plot_x_axis_labels):

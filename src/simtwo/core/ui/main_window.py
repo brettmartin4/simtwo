@@ -171,7 +171,6 @@ class SimImGuiApp:
         self.timing_plot_y_axis_font_size = 13.0
         self.timing_plot_tick_frequency = 0.0
         self.timing_plot_tick_font_size = 11.0
-        # ADDED
         self.timing_plot_show_target = False
         self.timing_plot_target_y_axis_label = "Target Values"
         self.timing_plot_target_y_axis_font_size = 13.0
@@ -182,6 +181,11 @@ class SimImGuiApp:
         self.polarization_plot_title = "Poincare Sphere"
         self.polarization_plot_title_font_size = 18.0
 
+        # ADDED
+        self.polarization_distribution_window_size = 200
+        self.polarization_distribution_start_idx = 0
+        self.applied_polarization_distribution_window_size = 200
+        self.applied_polarization_distribution_start_idx = 0
         self.generated_timing_xs: list[float] = []
         self.generated_timing_ys: list[float] = []
         self.generated_target_xs: list[float] = []
@@ -230,13 +234,11 @@ class SimImGuiApp:
             return self.timing_plot_x_axis_options[self.timing_plot_x_axis_idx]
         return "epoch"
 
-    # ADDED
     def default_timing_x_axis_label(self) -> str:
         if self.selected_timing_x_axis_mode == "posix_time":
             return "POSIX Time"
         return "Epoch"
 
-    # ADDED
     def set_timing_x_axis_idx(self, idx: int) -> None:
         old_default_labels = {"Epoch", "Index", "Index / Epoch", "POSIX Time"}
         old_label = str(self.timing_plot_x_axis_label or "")
@@ -309,8 +311,6 @@ class SimImGuiApp:
             self.ui.poincare_state = state
             if hasattr(self.ui, "poincare_states"):
                 self.ui.poincare_states.append(state)
-                if len(self.ui.poincare_states) > 500:
-                    del self.ui.poincare_states[: len(self.ui.poincare_states) - 500]
 
     def _clear_plot_state(self) -> None:
         with self.ui.lock:
@@ -382,6 +382,8 @@ class SimImGuiApp:
                 point_count = len(self.ui.poincare_states) if self.active_model_family == "polarization" else len(self.ui.times)
                 self.ui.running = False
             self.capture_generated_plot_data()
+            if self.active_model_family == "polarization":
+                self.apply_polarization_distribution_selection()
             self.rebuild_generated_plot_texture()
             self.set_status(f"{status_prefix} {point_count} point(s) in {self.backend.get_mode_name()} mode.")
         except Exception as exc:
@@ -427,10 +429,13 @@ class SimImGuiApp:
                 if not self.generated_poincare_states:
                     self.observer_plot_message = "Press Generate after applying a polarization model."
                     return
+                self.clamp_applied_polarization_distribution_controls()
                 texture_id, width, height = create_poincare_plot_texture(
                     self.generated_poincare_states,
                     width=700,
                     height=360,
+                    start_index=self.applied_polarization_distribution_start_idx,
+                    window_size=self.applied_polarization_distribution_window_size,
                 )
                 self.observer_plot_texture_id = texture_id
                 self.observer_plot_texture_width = width
@@ -474,24 +479,48 @@ class SimImGuiApp:
             self.observer_plot_message = f"Plot rendering failed: {exc}"
 
     def current_poincare_footer_text(self) -> str:
-        if not self.generated_poincare_states:
+
+        count = len(self.generated_poincare_states)
+        if count <= 0:
             return ""
-        state = self.generated_poincare_states[-1]
-        values: Any = None
-        if isinstance(state, dict):
-            for key in ("stokes", "stokes_vector", "poincare", "bloch"):
-                if key in state:
-                    values = state[key]
-                    break
-            if values is None and all(key in state for key in ("S1", "S2", "S3")):
-                values = [state["S1"], state["S2"], state["S3"]]
-        else:
-            values = state
-        try:
-            s1, s2, s3 = [float(value) for value in list(values)[:3]]
-            return f"S1={s1: .3f}   S2={s2: .3f}   S3={s3: .3f}"
-        except Exception:
-            return ""
+        self.clamp_applied_polarization_distribution_controls()
+        start = int(self.applied_polarization_distribution_start_idx)
+        end = min(count, start + int(self.applied_polarization_distribution_window_size))
+        used = max(0, end - start)
+        return f"Distribution window: observations {start}–{max(start, end - 1)} of {count} ({used} sample(s))"
+    
+    def clamp_polarization_distribution_controls(self) -> None:
+
+        count = len(self.generated_poincare_states)
+        max_count = max(1, count)
+        self.polarization_distribution_window_size = max(1, min(int(self.polarization_distribution_window_size), max_count))
+        max_start = max(0, count - int(self.polarization_distribution_window_size))
+        self.polarization_distribution_start_idx = max(0, min(int(self.polarization_distribution_start_idx), max_start))
+
+    def clamp_applied_polarization_distribution_controls(self) -> None:
+
+        count = len(self.generated_poincare_states)
+        max_count = max(1, count)
+        self.applied_polarization_distribution_window_size = max(1, min(int(self.applied_polarization_distribution_window_size), max_count))
+        max_start = max(0, count - int(self.applied_polarization_distribution_window_size))
+        self.applied_polarization_distribution_start_idx = max(0, min(int(self.applied_polarization_distribution_start_idx), max_start))
+
+    def apply_polarization_distribution_selection(self) -> None:
+
+        self.clamp_polarization_distribution_controls()
+        self.applied_polarization_distribution_window_size = int(self.polarization_distribution_window_size)
+        self.applied_polarization_distribution_start_idx = int(self.polarization_distribution_start_idx)
+        self.clamp_applied_polarization_distribution_controls()
+
+    def set_polarization_distribution_window_size(self, value: int) -> None:
+
+        self.polarization_distribution_window_size = int(value)
+        self.clamp_polarization_distribution_controls()
+
+    def set_polarization_distribution_start_idx(self, value: int) -> None:
+
+        self.polarization_distribution_start_idx = int(value)
+        self.clamp_polarization_distribution_controls()
 
     # Keeping this so it doesnt break the other parts of the code (less for me to refactor, lol)
     def start(self) -> None:
@@ -1097,7 +1126,6 @@ class SimImGuiApp:
 
         return self._build_observer_dataset_cache(dataset)
     
-    # ADDED
     def active_observer_dataset(self) -> ObserverDataset | None:
         if self.csv_path:
             active_name = os.path.splitext(os.path.basename(self.csv_path))[0]
@@ -1119,11 +1147,9 @@ class SimImGuiApp:
                     return candidate
         return ""
 
-    # ADDED
     def timing_posix_x_available(self) -> bool:
         return bool(self._timing_posix_column())
 
-    # ADDED
     def timing_x_axis_status(self) -> str:
         if self.timing_posix_x_available():
             dataset = self.active_observer_dataset()
@@ -1131,7 +1157,6 @@ class SimImGuiApp:
             return f"POSIX x-axis available from '{column}' in '{dataset.name}'." if dataset is not None else "POSIX x-axis available."
         return "No numeric POSIX time feature is available; index/epoch x-axis will be used."
 
-    # ADDED
     def current_timing_plot_xs(self, epochs: list[int]) -> list[float]:
         if self.selected_timing_x_axis_mode != "posix_time":
             return [float(epoch) for epoch in epochs]
@@ -1154,7 +1179,6 @@ class SimImGuiApp:
                 xs.append(float(epoch))
         return xs
 
-    # ADDED
     def _timing_target_column_candidates(self, dataset: ObserverDataset | None = None) -> list[str]:
         candidates: list[str] = []
         for value in (self.active_target_name, self.selected_target_name):
@@ -1176,7 +1200,6 @@ class SimImGuiApp:
             candidates.append(dataset.y_column)
         return candidates
 
-    # ADDED
     def _available_timing_target_column(self) -> tuple[ObserverDataset | None, str]:
         dataset = self.active_observer_dataset()
         if dataset is None or dataset.df.empty:
@@ -1191,7 +1214,6 @@ class SimImGuiApp:
                 return dataset, column
         return dataset, ""
 
-    # ADDED
     def timing_target_overlay_status(self) -> tuple[bool, str]:
         dataset, column = self._available_timing_target_column()
         if dataset is None:
@@ -1202,7 +1224,6 @@ class SimImGuiApp:
             return False, f"No numeric '{self.active_target_name}' column is available in '{dataset.name}'."
         return False, f"No numeric timing target column is available in '{dataset.name}'."
 
-    # ADDED
     def current_timing_target_overlay(self, xs: list[float]) -> tuple[list[float], list[float], str]:
         if not self.timing_plot_show_target:
             return [], [], ""
@@ -1272,6 +1293,8 @@ class SimImGuiApp:
                     self.generated_poincare_states or poincare_states,
                     title=self.polarization_plot_title,
                     title_font_size=self.polarization_plot_title_font_size,
+                    start_index=self.applied_polarization_distribution_start_idx,
+                    window_size=self.applied_polarization_distribution_window_size,
                 )
             else:
                 save_timing_plot(

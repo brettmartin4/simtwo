@@ -57,12 +57,12 @@ Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simula
 # To-do List:
 
  - (0) Create new Fig 2 for paper using Simtwo output
- - (1) For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere
- - (2) Validate modeling code with another notebook + load
- - (3) Convert jupyter notebooks to [Marimo](https://marimo.io/)
- - (4) Generate documentation
+ - (1) Validate modeling code with another notebook + load
+ - (2) Convert jupyter notebooks to [Marimo](https://marimo.io/)
+ - (3) Generate documentation
     - Look into [pdoc](https://pdoc.dev/) for generating code documentation (or [Sphinx](https://www.sphinx-doc.org/en/master/index.html) in conjunction with [ReadTheDocs.io](https://www.sphinx-doc.org/en/master/index.html))
        - ~~Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)~~
+ - ~~For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere~~
  - ~~Finish applying formatting changes and customization tools to observer mode~~
     - ~~The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like~~
        - ~~Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)~~

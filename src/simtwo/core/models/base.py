@@ -25,6 +25,10 @@ class DelayPrediction:
 
 
 class DelayModel(Protocol):
+    """Protocol implemented by all model wrappers used by the runtime.
+    
+    Not implemented in base class--defined in subclasses.
+    """
     
     name: str
 

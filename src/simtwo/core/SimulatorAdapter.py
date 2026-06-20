@@ -60,6 +60,10 @@ class SimulatorAdapter:
     _rng: np.random.Generator = field(init=False)
 
     def __post_init__(self):
+        """Initialize runtime-only fields and default observations.
+        
+        If no observations are supplied, a small sinusoidal temperature sequence is created so the demo can run without loading a CSV file.
+        """
         self._rng = np.random.default_rng(self.seed)
         if not self.observations:
             # For the demo, just create a sort of back and forth temp behavior. Can replace with actual CSV vals later
@@ -67,15 +71,24 @@ class SimulatorAdapter:
 
     # gui controols
     def set_run_speed(self, value: int):
+        """Set the delay between GUI playback epochs. (TODO: Schedule for deletion now that GUI just generates experiment plots on start)
+        
+        Args:
+            value: Playback delay in ms.
+        """
         self._run_speed_ms = int(value)
 
     def cleanup_after_ids(self):
+        """Stop the background simulation thread if one is running.
+        
+        This method is called by the GUI when the window is closing or when pending after-callbacks should be cleaned up.
+        """
         self._stop_evt.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
 
     def load_file(self, file_path: str):
-        """Load observations from a CSV. Each row becomes one epochs conditions. Not working just yet"""
+        """Load observations from a CSV. Each row becomes one epochs conditions."""
         obs: list[dict[str, Any]] = []
         with open(file_path, "r", newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -96,7 +109,11 @@ class SimulatorAdapter:
             self.current_epoch = 0
 
     def export_file(self, file_path: str):
-        """Very small placeholder export."""
+        """Write a small text summary of the current adapter settings.
+        
+        Args:
+            file_path: Destination path for the export file.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("simtwo gui example export\n")
             f.write(f"epochs={len(self.observations)}\n")
@@ -109,7 +126,14 @@ class SimulatorAdapter:
 
     # sim entry
     def run_sim(self, sender: Any, receiver: Any, update_plot: Callable[[int, float], None], update_conditions: Callable[[dict[str, Any]], None] | None = None, update_poincare_sphere: Callable[[Any], None] | None = None):
-        """Run epochs in a background thread and call GUI callbacks on main"""
+        """Run epochs in a background thread and call GUI callbacks on main.
+        
+        Args:
+            sender: GUI-facing sender object or name. This compatibility adapter does not directly use it when building the per-epoch sequence experiment.
+            receiver: GUI-facing receiver object or name. This compatibility adapter doesnt directly use it when building the per-epoch experiment.
+            update_plot: Callback called as update_plot(epoch, travel_time_s).
+            update_conditions: Optional callback receiving the current observation row.
+            update_poincare_sphere: Optional callback reserved for polarization state updates--this adapter does not currently emit polarization states."""
 
         self._stop_evt.clear()
 
@@ -134,7 +158,13 @@ class SimulatorAdapter:
         self._thread.start()
 
     def _run_one_epoch(self, temp_C: float) -> float:
-        """One photon A->B using the new ThermalQuantumChannel + RxNodeWithJitter classes"""
+        """One photon A->B using the new ThermalQuantumChannel + RxNodeWithJitter classes
+        
+        Args:
+            temp_C (float): Channel temperature for this epoch in degrees celsius.
+        
+        Returns:
+            float: Jittered photon flight time in seconds. Returns NAN if the receiver did not record an arrival."""
 
         tl = Timeline()
         alice = Node("A", tl)

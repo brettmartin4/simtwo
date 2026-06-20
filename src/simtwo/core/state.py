@@ -7,6 +7,8 @@ from typing import Any
 
 @dataclass
 class UIState:
+    """Manages the current state of objects and experiment parameters used by the GUI"""
+    
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     epochs: list[int] = field(default_factory=list)

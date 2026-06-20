@@ -1,3 +1,5 @@
+"""Run sequence plugins through the same session and callback flow used by the GUI."""
+
 from __future__ import annotations
 
 import csv
@@ -18,6 +20,9 @@ PoincareCallback = Callable[[Any], None]
 
 @dataclass
 class SequenceRunner:
+    """Execute a sequence plugin against the current simtwo runtime session.
+    
+    Runner builds the plugin once, iterates over the loaded dataset, updates link models through the plugin, and reports plot values, environmental conditions, and optional polarization states through callbacks."""
     session: RuntimeSession
     controls: ExecutionControls
     plugin: SequenceExperimentPlugin
@@ -26,6 +31,13 @@ class SequenceRunner:
     _thread: threading.Thread | None = None
 
     def start(self, cb_plot: PlotCallback, cb_conditions: ConditionsCallback, cb_poincare: PoincareCallback | None = None):
+        """Run generation and emit plot, condition, and polarization callbacks.
+        
+        Args:
+            cb_plot (PlotCallback): Callback that receives the epoch index and plot value.
+            cb_conditions (ConditionsCallback): Callback that receives the current environment/condition dictionary.
+            cb_poincare (PoincareCallback): Callback that receives the current polarization state, when available.
+        """
         self.stop()
 
         dataset = self.session.require_dataset()
@@ -91,6 +103,7 @@ class SequenceRunner:
         self.controls.running = False
 
     def stop(self):
+        """Stop any active execution and release runtime resources."""
         self.controls.stop_event.set()
         self.controls.running = False
         if self._thread and self._thread.is_alive():
@@ -98,6 +111,7 @@ class SequenceRunner:
         self._thread = None
 
     def reset(self):
+        """Return the backend or runner to its initial state and clear generated results."""
         self.stop()
         model = self.session.active_model
         if model is not None and hasattr(model, "reset"):
@@ -109,6 +123,11 @@ class SequenceRunner:
         self.controls.restart_requested = False
 
     def export_results(self, path: str):
+        """Write the currently generated results to a CSV file.
+        
+        Args:
+            path (str): File path used for saving data.
+        """
         # Can probably remove this since its only called after results are obtained? Check back here later
         if not self.session.results:
             return
@@ -126,6 +145,7 @@ class SequenceRunner:
 
     @staticmethod
     def _extract_plot_value(result: dict[str, Any]) -> float | None:
+        """Auto-retrieves target value."""
         for key in (
             "predicted_value",
             "plot_value",

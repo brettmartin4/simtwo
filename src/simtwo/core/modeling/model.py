@@ -20,6 +20,7 @@ from simtwo.core.backends.protocol import ChannelModelConfig
 
 @dataclass
 class ChannelModelSpec:
+    """Serializable metadata for a model configuration or trained model bundle."""
     name: str
     mode: str = "new"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -30,12 +31,28 @@ DEFAULT_MODEL_DIRNAME = "generated_models"
 
 
 def ensure_model_directory(base_dir: str | Path) -> Path:
+    """Create the generated model output directory if needed.
+    
+    Args:
+        base_dir (str | Path): Directory under which the generated-model folder should be created.
+    
+    Returns:
+        Path: Path to the generated model dir.
+    """
     out_dir = Path(base_dir) / DEFAULT_MODEL_DIRNAME
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
 
 def config_to_spec(config: ChannelModelConfig) -> ChannelModelSpec:
+    """Convert a runtime channel model config into saved metadata.
+    
+    Args:
+        config (ChannelModelConfig): Model config selected in the GUI.
+    
+    Returns:
+        ChannelModelSpec: ChannelModelSpec containing model name, mode, parameters, and training metadata.
+    """
     metadata = {
         "epochs": int(config.epochs),
         "learning_rate": float(config.learning_rate),
@@ -49,6 +66,15 @@ def config_to_spec(config: ChannelModelConfig) -> ChannelModelSpec:
 
 
 def save_model_spec(config: ChannelModelConfig, base_dir: str | Path = ".") -> Path:
+    """Write model config metadata to a json file.
+    
+    Args:
+        config (ChannelModelConfig): Model config to serialize.
+        base_dir (str | Path): Directory under which the generated model folder should be used.
+    
+    Returns:
+        Path: Path to the written json file.
+    """
     spec = config_to_spec(config)
     out_dir = ensure_model_directory(base_dir)
     safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in spec.name).strip("_")
@@ -61,6 +87,17 @@ def save_model_spec(config: ChannelModelConfig, base_dir: str | Path = ".") -> P
 
 
 def load_model_spec(path: str | Path) -> dict[str, Any]:
+    """Load model configuration metadata from json.
+    
+    Args:
+        path (str | Path): Path to a json model spec file.
+    
+    Returns:
+        Parsed metadata dictionary.
+    
+    Raises:
+        ValueError: If the file does not contain a json object.
+    """
     in_path = Path(path)
     with in_path.open("r", encoding="utf-8") as fh:
         data = json.load(fh)
@@ -76,6 +113,17 @@ SUPPORTED_MODEL_KINDS: dict[str, str] = {
 
 
 def normalize_model_kind(model_kind: str) -> str:
+    """Normalize user facing estimator names to supported internal keys.
+    
+    Args:
+        model_kind (str): Estimator name or alias from the GUI/configuration.
+    
+    Returns:
+        str: Canonical key from SUPPORTED_MODEL_KINDS.
+    
+    Raises:
+        ValueError: If the estimator kind is unsupported.
+    """
     key = str(model_kind or "").strip().lower().replace(" ", "_")
     # TODO: Refactor this. I don't like the way I implemented this:
     aliases = {
@@ -97,6 +145,15 @@ def normalize_model_kind(model_kind: str) -> str:
 
 
 def create_estimator(model_kind: str, model_params: dict[str, Any] | None = None) -> Any:
+    """Create a sklearn estimator for the requested model kind.
+    
+    Args:
+        model_kind (str): Supported model kind or alias.
+        model_params: Optional estimator hyperparameters.
+    
+    Returns:
+        Configured sklearn estimator instance.
+    """
     params = dict(model_params or {})
     normalized = normalize_model_kind(model_kind)
 
@@ -126,6 +183,19 @@ def create_estimator(model_kind: str, model_params: dict[str, Any] | None = None
 
 
 def build_training_arrays(observations: list[dict[str, Any]], feature_names: list[str] | None, target_name: str | None) -> tuple[np.ndarray, np.ndarray, int]:
+    """Build numeric feature and target arrays from observation dictionaries.
+    
+    Args:
+        observations: Input rows from the loaded dataset.
+        feature_names: Model feature columns to use as predictors.
+        target_name (str): Target column to predict.
+    
+    Returns:
+        Tuple (x_arr, y_arr, skipped) containing the feature matrix, target vector, and number of skipped non-numeric/incomplete rows.
+    
+    Raises:
+        ValueError: If no features, no target, or no usable numeric rows are found.
+    """
     if not feature_names:
         raise ValueError("Choose at least one feature column before training.")
     if not target_name:
@@ -176,6 +246,18 @@ def build_training_arrays(observations: list[dict[str, Any]], feature_names: lis
 
 
 def _compute_split_counts(n_rows: int, config: ChannelModelConfig) -> tuple[int,int,int]:
+    """Compute train, validation, and test row counts.
+    
+    Args:
+        n_rows (int): Number of usable training rows.
+        config (ChannelModelConfig): Model configuration containing split fractions.
+    
+    Returns:
+        Tuple (train_count, validation_count, test_count).
+    
+    Raises:
+        ValueError: If the dataset is too small or split fractions are invalid.
+    """
     if n_rows < 3:
         raise ValueError("At least 3 usabl rows are required to create train/val/test splits")
     
@@ -226,7 +308,16 @@ def _compute_split_counts(n_rows: int, config: ChannelModelConfig) -> tuple[int,
     return train_count, validation_count, test_count
 
 
-def fit_model_bundle(observations: list[dict[str, Any]], config: ChannelModelConfig,) -> dict[str, Any]:
+def fit_model_bundle(observations: list[dict[str, Any]], config: ChannelModelConfig) -> dict[str, Any]:
+    """Train an estimator and package it with metrics and metadata.
+    
+    Args:
+        observations: Input rows from the loaded dataset.
+        config (ChannelModelConfig): Model configuration describing features, target, split fractions, estimator kind, and hyperparameters.
+    
+    Returns:
+        Dictionary containing the fitted estimator, metadata, split counts, and train/validation/test metrics.
+    """
     feature_names = list(config.feature_names or [])
     target_name = config.target_name
     x_arr, y_arr, skipped_rows = build_training_arrays(observations, feature_names, target_name)
@@ -295,6 +386,15 @@ def fit_model_bundle(observations: list[dict[str, Any]], config: ChannelModelCon
 
 
 def save_trained_model_bundle(bundle: dict[str, Any], path: str | Path) -> Path:
+    """Save a trained model bundle as a joblib file.
+    
+    Args:
+        bundle: Model bundle produced by fit_model_bundle.
+        base_dir (str | Path): Directory under which the generated model folder should be used.
+    
+    Returns:
+        Path: Path to the written joblib file.
+    """
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, out_path)
@@ -302,6 +402,14 @@ def save_trained_model_bundle(bundle: dict[str, Any], path: str | Path) -> Path:
 
 
 def load_trained_model_bundle(path: str | Path) -> dict[str, Any]:
+    """Load a trained model bundle from a joblib file.
+    
+    Args:
+        path (str | Path): Path to a saved joblib model bundle.
+    
+    Returns:
+        Loaded bundle dictionary.
+    """
     in_path = Path(path)
     data = joblib.load(in_path)
     if not isinstance(data, dict):

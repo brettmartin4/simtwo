@@ -33,6 +33,9 @@ POSIX_UNIT_FACTORS_TO_SECONDS = {
 # This is the data class held by the GUI
 @dataclass
 class ProcessingDataset:
+    """Container for a dataset managed by the data processing UI.
+    
+    The object keeps the dataframe, source file paths, and optional time column metadata together as one transforms, merges, downsamples, or exports intermediate datasets."""
     name: str
     df: pd.DataFrame
     source_paths: list[str] = field(default_factory=list)
@@ -46,6 +49,14 @@ class ProcessingDataset:
     notes: list[str] = field(default_factory=list)
 
     def copy(self, *, name: str | None = None) -> "ProcessingDataset":
+        """Handle copy behavior.
+        
+        Args:
+            name (str): Name assigned to the dataset.
+        
+        Returns:
+            ProcessingDataset: The copied dataset.
+        """
         return ProcessingDataset(
             name=name or self.name,
             df=self.df.copy(),
@@ -62,6 +73,14 @@ class ProcessingDataset:
 
 
 def _safe_dataset_label(name: str) -> str:
+    """Helper for safe dataset labeling.
+    
+    Args:
+        name (str): Name initially assigned to the dataset.
+    
+    Returns:
+        str: Updated dataset label.
+    """
     out = []
     for ch in name:
         if ch.isalnum() or ch in ("_", "-"):
@@ -72,6 +91,7 @@ def _safe_dataset_label(name: str) -> str:
 
 
 def candidate_time_columns(df: pd.DataFrame) -> list[str]:
+    """Auto-determines time columns based on a set of pre-defined substrings."""
     lowered_hits: list[str] = []
     others: list[str] = []
     for col in df.columns:
@@ -84,6 +104,7 @@ def candidate_time_columns(df: pd.DataFrame) -> list[str]:
 
 
 def ensure_posix_time(dataset: ProcessingDataset) -> None:
+    """Ensures posix time is available or valid."""
     if dataset.posix_time_ready and POSIX_TIME_COL in dataset.df.columns:
         dataset.df = (
             dataset.df
@@ -124,6 +145,15 @@ def ensure_posix_time(dataset: ProcessingDataset) -> None:
 
 
 def numeric_columns(df: pd.DataFrame, *, exclude: Iterable[str] = ()) -> list[str]:
+    """Produces a list of only numeric terms in a dataframe.
+    
+    Args:
+        df (pd.DataFrame): DataFrame to inspect.
+        exclude: Iterable of strings used for exclude op.
+
+    Returns:
+        A list of column names in str format.
+    """
     blocked = set(exclude)
     out: list[str] = []
     for col in df.columns:
@@ -135,6 +165,18 @@ def numeric_columns(df: pd.DataFrame, *, exclude: Iterable[str] = ()) -> list[st
 
 
 def add_derivative(dataset: ProcessingDataset, column: str, *, output_name: str | None = None) -> str:
+    """Add derivative of a given feature to the dataset.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset or processing dataset to operate on.
+        column (str): Feature to calculate derivative from.
+        output_name (str): Value used for output feature name.
+    
+    Returns:
+        The name of the newly-addeed derivative feature.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state."""
     ensure_posix_time(dataset)
     if column not in dataset.df.columns:
         raise ValueError(f"Column '{column}' not found.")
@@ -146,6 +188,21 @@ def add_derivative(dataset: ProcessingDataset, column: str, *, output_name: str 
 
 
 def add_quantified_column(dataset: ProcessingDataset, column: str, *, method: str, window: int, output_name: str | None = None) -> str:
+    """Adds a new feature to the dataset that performs a quantification operation on one or more features.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset to operate on.
+        column (str): Column name to transform.
+        method (str): Quantification method selected by the caller or GUI.
+        window (int): Window size of aggregation operation.
+        output_name (str): Value used for output name.
+    
+    Returns:
+        str: The output feature/target name.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     if column not in dataset.df.columns:
         raise ValueError(f"Column '{column}' not found.")
     window = max(1, int(window))
@@ -173,6 +230,15 @@ def add_quantified_column(dataset: ProcessingDataset, column: str, *, method: st
 
 
 def remove_columns(dataset: ProcessingDataset, columns: Iterable[str]) -> None:
+    """Removes specified columns from the dataset.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset to operate on.
+        column (str): Column name(s) to remove.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     to_drop = [col for col in columns if col in dataset.df.columns]
     if not to_drop:
         raise ValueError("No selected variables were found in the active dataset.")
@@ -182,6 +248,7 @@ def remove_columns(dataset: ProcessingDataset, columns: Iterable[str]) -> None:
 
 
 def remove_duplicate_timestamps(dataset: ProcessingDataset) -> int:
+    """Removes entries from the dataset with identical timestamps."""
     ensure_posix_time(dataset)
     before = len(dataset.df)
     dataset.df = dataset.df.drop_duplicates(subset=[POSIX_TIME_COL], keep="first").reset_index(drop=True)
@@ -189,6 +256,7 @@ def remove_duplicate_timestamps(dataset: ProcessingDataset) -> int:
 
 
 def drop_nan_rows(dataset: ProcessingDataset, columns: Iterable[str]) -> int:
+    """Drops observations from dataset with NAN values."""
     cols = [col for col in columns if col in dataset.df.columns]
     if not cols:
         raise ValueError("Select one or more variables first.")
@@ -198,6 +266,16 @@ def drop_nan_rows(dataset: ProcessingDataset, columns: Iterable[str]) -> int:
 
 
 def interpolate_missing(dataset: ProcessingDataset, columns: Iterable[str], *, order: int = 1) -> None:
+    """Interpolates missing values for a specified feature/target in a dataset.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset to operate on.
+        column (str): Column name to interpolate.
+        order (int): Interpolation degree (ex: 1 = linear, 2+ = polynomial).
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     cols = [col for col in columns if col in dataset.df.columns]
     if not cols:
         raise ValueError("Select one or more variables first.")
@@ -210,6 +288,16 @@ def interpolate_missing(dataset: ProcessingDataset, columns: Iterable[str], *, o
 
 
 def fill_missing(dataset: ProcessingDataset, columns: Iterable[str], *, direction: str) -> None:
+    """Fills in missing values for a dataset for any given columns.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset to operate on.
+        column (str): Column name to fill.
+        direction (str): Fill direction (forward or backward).
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     cols = [col for col in columns if col in dataset.df.columns]
     if not cols:
         raise ValueError("Select one or more variables first.")
@@ -225,6 +313,7 @@ def fill_missing(dataset: ProcessingDataset, columns: Iterable[str], *, directio
 
 
 def polynomial_expand(dataset: ProcessingDataset, columns: Iterable[str], *, degree: int) -> list[str]:
+    """Polynomially expands (with interaction terms) given features in a dataset to a specified degree."""
     cols = [col for col in columns if col in dataset.df.columns]
     if len(cols) == 0:
         raise ValueError("Select one or more numeric variables first.")
@@ -245,6 +334,7 @@ def polynomial_expand(dataset: ProcessingDataset, columns: Iterable[str], *, deg
 
 
 def create_interaction_term(dataset: ProcessingDataset, columns: Iterable[str], *, output_name: str | None = None) -> str:
+    """Creates a new dataset feature that is the product of two or more input features."""
     cols = [col for col in columns if col in dataset.df.columns]
     if len(cols) < 2:
         raise ValueError("Select at least two variables.")
@@ -257,6 +347,7 @@ def create_interaction_term(dataset: ProcessingDataset, columns: Iterable[str], 
 
 
 def create_average_merge(dataset: ProcessingDataset, columns: Iterable[str], *, output_name: str | None = None) -> str:
+    """Creates a new dataset feature consisting of the average values of the specified inpuit features."""
     cols = [col for col in columns if col in dataset.df.columns]
     # TODO: verify whether this function can even be called if fewer than two vars are selected
     if len(cols) < 2:
@@ -268,6 +359,20 @@ def create_average_merge(dataset: ProcessingDataset, columns: Iterable[str], *, 
 
 
 def downsample_dataset(dataset: ProcessingDataset, *, method: str, window: int, reference: ProcessingDataset | None = None) -> ProcessingDataset:
+    """Downsamples the dataset using decimation or aggregation.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset or processing dataset to operate on.
+        method (str): Processing method selected by the caller or GUI.
+        window (int): Window size for downsampling method.
+        reference (ProcessingDataset): If using a reference set, timestamp values will be aligned to this set.
+    
+    Returns:
+        ProcessingDataset: The newly created processing dataset.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     ensure_posix_time(dataset)
     df = dataset.df.sort_values(POSIX_TIME_COL).reset_index(drop=True).copy()
     window = max(1, int(window))
@@ -315,6 +420,18 @@ def downsample_dataset(dataset: ProcessingDataset, *, method: str, window: int, 
 
 
 def merge_datasets_on_posix(datasets: list[ProcessingDataset], *, merged_name: str | None = None) -> ProcessingDataset:
+    """Merges two or more datasets by POSIX time feature.
+    
+    Args:
+        dataset (ProcessingDataset): Loaded dataset or processing dataset to operate on.
+        merged_name (str): Name of the newly-created dataset.
+    
+    Returns:
+        ProcessingDataset: The newly created processing dataset.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     if len(datasets) < 2:
         raise ValueError("Select at least two datasets to merge.")
     for ds in datasets:
@@ -362,6 +479,7 @@ def merge_datasets_on_posix(datasets: list[ProcessingDataset], *, merged_name: s
 
 
 def descriptive_stats_text(dataset: ProcessingDataset) -> str:
+    """Retrieves the string containinmg descriptive statistics for the current processing dataset."""
     if dataset.df.empty:
         return f"Dataset '{dataset.name}' is empty."
 

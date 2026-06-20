@@ -1,3 +1,5 @@
+"""Schedule repeated link updates and entanglement requests in sequence timelines."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,9 +14,7 @@ ConditionsCallback = Callable[[dict[str, Any]], None]
 
 @dataclass
 class SequenceExperimentScheduler:
-    """
-    Schedules one long sequence timeline (can probably remove once sim control panel is fixed)
-    """
+    """Schedules one long sequence timeline (TODO: can probably remove once sim control panel is fixed)"""
 
     timeline: Any
     rows: list[dict[str, Any]]
@@ -63,10 +63,20 @@ class SequenceExperimentScheduler:
                 )
 
     def apply_link_update(self, row_index: int):
+        """Apply one predicted link update to the sequence experiment objects.
+        
+        Args:
+            row_index (int): Value used for row index.
+        """
         row = dict(self.rows[row_index])
         self.current_model_info[row_index] = self.link_model_manager.apply_to_registered_links(row)
 
     def issue_request(self, row_index: int):
+        """Issue an entanglement or communication request on the sequence timeline.
+        
+        Args:
+            row_index (int): Value used for row index.
+        """
         base_t = row_index * self.row_spacing_ps
 
         self.requester.network_manager.request(
@@ -78,9 +88,12 @@ class SequenceExperimentScheduler:
         )
 
     def sample_attempt(self, row_index: int):
-        """
-        count cum entangled memories on requester that point to responder
-        success for sampled attempt is cum count increased since last sample
+        """Counts cumulative entangled memories on requester that point to responder.
+        
+            Success for sampled attempt is cumumulative count increased since last sample.
+
+            Args:
+                row_index (int): Value used for row index.
         """
         total_successes_now = 0
         for info in self.requester.resource_manager.memory_manager:

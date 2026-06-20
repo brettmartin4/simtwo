@@ -1,3 +1,5 @@
+"""Manage simtwo backed link groups inside sequence network experiments."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +11,9 @@ from simtwo.core.modeling.model import load_trained_model_bundle
 
 @dataclass
 class LinkGroup:
+    """Describe a set of sequence links that share the same simtwo channel model.
+    
+    Each group records one or more channels and optional nodes that should be updated together when a new pred is generated."""
     name: str
     channels: list[Any]
     delay_fraction: float = 1.0
@@ -16,13 +21,17 @@ class LinkGroup:
 
 
 class LinkModelManager:
-    """
-    owns cur active GUI model and applies pred fullpath delay/distance to sequence channels
-
-
-    """
+    """Owns current active GUI model and applies pred fullpath delay/distance to sequence channels."""
 
     def __init__(self, *, base_distance_m: float, alpha_per_c: float, t0_c: float, light_speed_m_per_ps: float):
+        """Initialize the object and store the runtime dependencies it needs.
+        
+        Args:
+            base_distance_m (float): Value used for base distance m.
+            alpha_per_c (float): Value used for alpha per c.
+            t0_c (float): Value used for t0 c.
+            light_speed_m_per_ps (float): Value used for light speed m per ps.
+        """
         self.base_distance_m = float(base_distance_m)
         self.alpha_per_c = float(alpha_per_c)
         self.t0_c = float(t0_c)
@@ -35,9 +44,18 @@ class LinkModelManager:
         self.link_groups: list[LinkGroup] = []
 
     def reset_groups(self):
+        """Clear all registered link groups."""
         self.link_groups = []
 
     def register_group(self, name: str, channels: list[Any], *,  delay_fraction: float = 1.0, distance_fraction: float = 1.0):
+        """Register a link group that should receive simtwo model updates.
+        
+        Args:
+            name (str): Name assigned to the object or dataset.
+            channels: List containing channels.
+            delay_fraction (float): Value used for delay fraction.
+            distance_fraction (float): Value used for distance fraction.
+        """
         self.link_groups.append(
             LinkGroup(
                 name=name,
@@ -48,6 +66,14 @@ class LinkModelManager:
         )
 
     def configure(self, config):
+        """Configure a link group or manager from the current runtime context.
+        
+        Args:
+            config: Channel model config selected in the GUI.
+        
+        Raises:
+            RuntimeError: If the operation cannot be completed with the current inputs or state.
+        """
         self.model_config = config
         self.model_bundle = None
         self.model_name = "default_physical_model"
@@ -70,6 +96,17 @@ class LinkModelManager:
         )
 
     def _get_temperature(self, row: dict[str, Any]) -> float:
+        """Return temp for internal use.
+        
+        Args:
+            row: Input observation row.
+        
+        Returns:
+            The computed temp value.
+        
+        Raises:
+            RuntimeError: If the operation cannot be completed with the current inputs or state.
+        """
         for key in ("temperature_x", "temperature", "temp_C", "temp"):
             if key in row:
                 return float(row[key])
@@ -134,6 +171,14 @@ class LinkModelManager:
         )
 
     def apply_to_registered_links(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Apply to registered links to the current state.
+        
+        Args:
+            row: Input observation row.
+        
+        Returns:
+            Metadata or result values produced by the operation.
+        """
         full_delay_ps, full_delay_ns, full_delay_s, full_distance_m = self._predict_full_path(row)
 
         if full_distance_m is None:

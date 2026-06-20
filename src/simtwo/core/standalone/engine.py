@@ -1,3 +1,5 @@
+"""Execute simtwo preds directly from loaded datasets without a sequence timeline."""
+
 from __future__ import annotations
 
 import csv
@@ -10,12 +12,7 @@ import numpy as np
 import pandas as pd
 
 from simtwo.core.models.base import DelayPrediction
-from simtwo.core.runtime.session import (
-    ExecutionControls,
-    FeatureBindings,
-    LoadedDataset,
-    RuntimeSession,
-)
+from simtwo.core.runtime.session import ExecutionControls, FeatureBindings, LoadedDataset, RuntimeSession
 
 PlotCallback = Callable[[int, float], None]
 ConditionsCallback = Callable[[dict[str, Any]], None]
@@ -25,9 +22,9 @@ PoincareCallback = Callable[[Any], None]
 @dataclass
 class StandaloneEngine:
     """
-    standalone runtime.
+    Standalone runtime.
 
-    This keeps what I had in the previoous build:
+    This keeps what I had in the previoous build (tcl/tk version):
     - stepping through one observation at a time
     - using the current active model to generate plotted value
     - ensuring GUI run controls
@@ -46,6 +43,11 @@ class StandaloneEngine:
     _seed: int = 123
 
     def _default_dataset(self) -> LoadedDataset:
+        """Internal helper for default dataset.
+        
+        Returns:
+            LoadedDataset: The computed LoadedDataset value.
+        """
         rows = []
         for i in range(30):
             rows.append(
@@ -58,9 +60,23 @@ class StandaloneEngine:
         return LoadedDataset(name="default_placeholder", df=df, time_column="epoch")
 
     def set_dataset(self, dataset: LoadedDataset) -> None:
+        """Assign the dataset used for subsequent preds.
+        
+        Args:
+            dataset (LoadedDataset): Loaded dataset or processing dataset to operate on.
+        """
         self.session.set_dataset(dataset)
 
     def load_csv(self, path: str, dataset_name: str | None = None, time_column: str = "row_index", timezone: str = "UTC", posix_unit: str = "s"):
+        """Load a CSV file into the runtime dataset.
+        
+        Args:
+            path (str): File path used for loading or saving data.
+            dataset_name (str): Value used for dataset name.
+            time_column (str): Column containing time values.
+            timezone (str): Timezone used to interpret datetime values.
+            posix_unit (str): Unit of the POSIX timestamp column.
+        """
         df = pd.read_csv(path, encoding="utf-8-sig")
         self.set_dataset(
             LoadedDataset(
@@ -73,12 +89,29 @@ class StandaloneEngine:
         )
 
     def set_model(self, model):
+        """Assign the channel model used for subsequent preds.
+        
+        Args:
+            model: Value used for model.
+        """
         self.session.set_model(model)
 
     def set_feature_bindings(self, mapping: dict[str, str]):
+        """Set the mapping between model feature names and dataset columns.
+        
+        Args:
+            mapping: Value used for mapping.
+        """
         self.session.feature_bindings = FeatureBindings(mapping=mapping)
 
     def start(self, cb_plot: PlotCallback, cb_conditions: ConditionsCallback, cb_poincare: PoincareCallback | None = None):
+        """Run generation and emit plot, condition, and polarization callbacks.
+        
+        Args:
+            cb_plot (PlotCallback): Callback that receives the epoch index and plot value.
+            cb_conditions (ConditionsCallback): Callback that receives the current environment/condition dict.
+            cb_poincare (PoincareCallback): Callback that receives the current polarization state, when available.
+            """
         
         self.stop()
 
@@ -88,9 +121,8 @@ class StandaloneEngine:
         model = self.session.require_model()
         dataset = self.session.require_dataset()
 
-        # If the user is still on the default timing model and no explicit binding
-        # has been set, infer the temperature column.  Polarization models may
-        # intentionally use no feature bindings, so only do this for timing models.
+        # If user is still on the default timing model and no explicit binding has been set, infer the temperature column.
+        # Polarization models may intentionally use no feature bindings, so only do this for timing models.
         model_family = str(getattr(model, "model_family", "timing")).strip().lower()
         if model_family == "timing" and not self.session.feature_bindings.mapping:
             cols = set(str(c) for c in dataset.df.columns)
@@ -177,6 +209,7 @@ class StandaloneEngine:
         self.controls.running = False
 
     def stop(self):
+        """Stop any active execution and release runtime resources."""
         self.controls.stop_event.set()
         self.controls.running = False
         if self._thread and self._thread.is_alive():
@@ -184,6 +217,7 @@ class StandaloneEngine:
         self._thread = None
 
     def reset(self):
+        """Return the backend or runner to its initial state and clear generated results."""
         self.stop()
         model = self.session.active_model
         if model is not None and hasattr(model, "reset"):
@@ -195,6 +229,11 @@ class StandaloneEngine:
         self.controls.restart_requested = False
 
     def export_results(self, path: str):
+        """Write the currently generated results to a CSV file.
+        
+        Args:
+            path (str): File path used for loading or saving data.
+        """
         if not self.session.results:
             return
 

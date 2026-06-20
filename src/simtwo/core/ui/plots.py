@@ -1,3 +1,5 @@
+"""Render timing and polarization plots as OpenGL textures and exportable MPL figures."""
+
 from __future__ import annotations
 
 from typing import Any, Sequence
@@ -19,6 +21,7 @@ _DEFAULT_IMGUI_FONT_SIZE = 13.0
 
 
 def _font_scale(font_size: float) -> float:
+    """Sets image font size with error checking."""
     try:
         value = float(font_size)
     except (TypeError, ValueError):
@@ -27,7 +30,7 @@ def _font_scale(font_size: float) -> float:
 
 
 def _draw_scaled_text(text: str, font_size: float) -> None:
-
+    """Draws text at a given font size."""
     try:
         imgui.set_window_font_scale(_font_scale(font_size))
         imgui.text_unformatted(str(text))
@@ -39,7 +42,7 @@ def _draw_scaled_text(text: str, font_size: float) -> None:
 
 
 def _draw_scaled_text_at(pos: tuple[float, float], text: str, font_size: float) -> None:
-
+    """Draws text at a specified position with a given font size."""
     old_pos = imgui.get_cursor_screen_pos()
     try:
         imgui.set_cursor_screen_pos(pos)
@@ -49,7 +52,7 @@ def _draw_scaled_text_at(pos: tuple[float, float], text: str, font_size: float) 
 
 
 def _format_tick(value: float) -> str:
-
+    """Applies tick formatting for timing plots."""
     if not math.isfinite(value):
         return ""
     abs_value = abs(value)
@@ -63,7 +66,7 @@ def _format_tick(value: float) -> str:
 
 
 def _build_axis_ticks(vmin: float, vmax: float, frequency: float = 0.0, count: int = 5) -> list[float]:
-
+    """Draws axis ticks with given parameters for timing plots."""
     if not math.isfinite(vmin) or not math.isfinite(vmax):
         return []
     if vmax == vmin:
@@ -84,7 +87,32 @@ def _build_axis_ticks(vmin: float, vmax: float, frequency: float = 0.0, count: i
 
 
 def create_timing_plot_texture(xs: Sequence[float], ys: Sequence[float], *, width: int, height: int, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> tuple[int, int, int]:
+    """Render a timing plot to an OpenGL texture.
     
+    Args:
+        xs: X-axis values to plot.
+        ys: Y-axis values to plot.
+        width (int): Requested texture or figure width in pixels.
+        height (int): Requested texture or figure height in pixels.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+        x_axis_label (str): Text displayed on the x-axis.
+        x_axis_font_size (float): Font size used for the x-axis label.
+        y_axis_label (str): Text displayed on the y-axis.
+        y_axis_font_size (float): Font size used for the y-axis label.
+        tick_frequency (float): Optional x-axis tick interval; zero keeps mpl automatic ticks.
+        tick_font_size (float): Font size used for axis tick labels.
+        target_xs: Optional x-axis values for the target overlay.
+        target_ys: Optional target values plotted on the right y-axis.
+        target_label (str): Legend label used for target values.
+        target_y_axis_label (str): Label for the right y-axis when target values are shown.
+        target_y_axis_font_size (float): Font size used for the right y-axis label.
+    
+    Returns:
+        The OpenGL texture id and the rendered texture dimensions.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state."""
     if len(xs) < 2 or len(ys) < 2:
         raise ValueError("No timing plot data is available to render.")
     rgba = _render_timing_rgba(
@@ -110,7 +138,21 @@ def create_timing_plot_texture(xs: Sequence[float], ys: Sequence[float], *, widt
 
 
 def create_poincare_plot_texture(states: Sequence[Any], *, width: int, height: int, start_index: int = 0, window_size: int = 200) -> tuple[int, int, int]:
+    """Render a Poincare sphere polarization plot to an OpenGL texture.
     
+    Args:
+        states: Polarization states to render or convert.
+        width (int): Requested texture or figure width in pixels.
+        height (int): Requested texture or figure height in pixels.
+        start_index (int): First observation index included in the polarization distribution window.
+        window_size (int): Number of observations included in the polarization distribution window.
+    
+    Returns:
+        The OpenGL texture id and the rendered texture dimensions.
+    
+    Raises:
+        ValueError: If the operation cannot be completed with the current inputs or state.
+    """
     vectors = _window_stokes_vectors(states, start_index=start_index, window_size=window_size)
     if not vectors:
         raise ValueError("No polarization plot data is available to render.")
@@ -119,7 +161,7 @@ def create_poincare_plot_texture(states: Sequence[Any], *, width: int, height: i
 
 
 def delete_plot_texture(texture_id: int | None) -> None:
-
+    """Delete an OpenGL texture based on id if it exists."""
     if texture_id is None:
         return
     try:
@@ -129,7 +171,18 @@ def delete_plot_texture(texture_id: int | None) -> None:
 
 
 def draw_static_plot_texture(label: str, texture_id: int | None, texture_size: tuple[int, int], size: tuple[float, float], *, title: str | None = None, title_font_size: float = 18.0, empty_message: str = "No plot has been generated yet.", footer_text: str = "") -> None:
+    """Draw an existing plot texture without rebuilding it.
     
+    Args:
+        label (str): Identifier used for the ImGui child window or plot label.
+        texture_id (int): OpenGL texture identifier to display or delete.
+        texture_size: Pixel width and height of the texture.
+        size: Requested display size for the ImGui child region.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+        empty_message (str): Message shown when no texture is available.
+        footer_text (str): Optional text displayed beneath the plot.
+    """
     if title:
         _draw_scaled_text(title, title_font_size)
     child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_static_texture"
@@ -152,7 +205,31 @@ def draw_static_plot_texture(label: str, texture_id: int | None, texture_size: t
 
 
 def draw_line_plot(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float] = (700, 260), pad: float = 10.0, *, title: str | None = None, title_font_size: float = 18.0, x_axis_label: str = "Epoch", x_axis_font_size: float = 13.0, y_axis_label: str = "Prediction", y_axis_font_size: float = 13.0, tick_frequency: float = 0.0, tick_font_size: float = 11.0, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> None:
-
+    """Draw a timing plot through the legacy per frame texture cache.
+    
+    Args:
+        label (str): Identifier used for the ImGui child window or plot label.
+        xs: X-axis values to plot.
+        ys: Y-axis values to plot.
+        size: Requested display size for the ImGui child region.
+        pad (float): Value used for pad.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+        x_axis_label (str): Text displayed on the x-axis.
+        x_axis_font_size (float): Font size used for the x-axis label.
+        y_axis_label (str): Text displayed on the y-axis.
+        y_axis_font_size (float): Font size used for the y-axis label.
+        tick_frequency (float): Optional x-axis tick interval; zero keeps mpl automatic ticks.
+        tick_font_size (float): Font size used for axis tick labels.
+        target_xs: Optional x-axis values for the target overlay.
+        target_ys: Optional target values plotted on the right y-axis.
+        target_label (str): Legend label used for target values.
+        target_y_axis_label (str): Label for the right y-axis when target values are shown.
+        target_y_axis_font_size (float): Font size used for the right y-axis label.
+    
+    Raises:
+        RuntimeError: If the operation cannot be completed with the current inputs or state.
+    """
     child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_plot"
     imgui.begin_child(child_id, width=size[0], height=size[1], border=True)
 
@@ -204,6 +281,7 @@ _TIMING_TEXTURE_CACHE: dict[str, Any] = {
 
 
 def _series_key(values: Sequence[float] | None, precision: int = 6) -> tuple[float, ...]:
+    """Round floating point values in a sequence to a given precision"""
     if values is None:
         return ()
     return tuple(round(float(value), precision) for value in values)
@@ -222,7 +300,30 @@ def _matplotlib_series_color(index: int = 1) -> str | None:
 
 
 def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[float], size: tuple[float, float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float) -> tuple[int | None, int, int]:
+    """Return or create timing texture for internal use.
     
+    Args:
+        label (str): Identifier used for the ImGui child window or plot label.
+        xs: X-axis values to plot.
+        ys: Y-axis values to plot.
+        size: Requested display size for the ImGui child region.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+        x_axis_label (str): Text displayed on the x-axis.
+        x_axis_font_size (float): Font size used for the x-axis label.
+        y_axis_label (str): Text displayed on the y-axis.
+        y_axis_font_size (float): Font size used for the y-axis label.
+        tick_frequency (float): Optional x-axis tick interval; zero keeps mpl automatic ticks.
+        tick_font_size (float): Font size used for axis tick labels.
+        target_xs: Optional x-axis values for the target overlay.
+        target_ys: Optional target values plotted on the right y-axis.
+        target_label (str): Legend label used for target values.
+        target_y_axis_label (str): Label for the right y-axis when target values are shown.
+        target_y_axis_font_size (float): Font size used for the right y-axis label.
+    
+    Returns:
+        The computed texture value
+    """
     width = int(max(256, min(1200, size[0] - 12)))
     height = int(max(180, min(800, size[1] - 12)))
     key = (
@@ -293,7 +394,30 @@ def _get_or_create_timing_texture(label: str, xs: Sequence[float], ys: Sequence[
     
 
 def _render_timing_rgba( xs: Sequence[float], ys: Sequence[float], *, width: int, height: int, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None, target_ys: Sequence[float] | None, target_label: str, target_y_axis_label: str, target_y_axis_font_size: float):
-
+    """Generates timing plot.
+    
+    Args:
+        xs: X-axis values to plot.
+        ys: Y-axis values to plot.
+        width (int): Requested texture or figure width in pixels.
+        height (int): Requested texture or figure height in pixels.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+        x_axis_label (str): Text displayed on the x-axis.
+        x_axis_font_size (float): Font size used for the x-axis label.
+        y_axis_label (str): Text displayed on the y-axis.
+        y_axis_font_size (float): Font size used for the y-axis label.
+        tick_frequency (float): Optional x-axis tick interval; zero keeps mpl automatic ticks.
+        tick_font_size (float): Font size used for axis tick labels.
+        target_xs: Optional x-axis values for the target overlay.
+        target_ys: Optional target values plotted on the right y-axis.
+        target_label (str): Legend label used for target values.
+        target_y_axis_label (str): Label for the right y-axis when target values are shown.
+        target_y_axis_font_size (float): Font size used for the right y-axis label.
+    
+    Returns:
+        The computed value for the requested operation.
+    """
     dpi = 100
     fig, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
     ax.plot(list(xs), list(ys), linewidth=1.8, label="Prediction")
@@ -334,6 +458,18 @@ _POINCARE_TEXTURE_CACHE: dict[str, Any] = {
 
 
 def draw_poincare_bloch_plot(label: str, states: Sequence[Any], size: tuple[float, float] = (700, 360), *, title: str | None = None, title_font_size: float = 18.0) -> None:
+    """Draw a Poincare sphere through the legacy per frame texture cache.
+    
+    Args:
+        label (str): Identifier used for the ImGui child window or plot label.
+        states: Polarization states to render or convert.
+        size: Requested display size for the ImGui child region.
+        title (str): Plot or window title text.
+        title_font_size (float): Font size used for the plot title.
+    
+    Raises:
+        RuntimeError: If the operation cannot be completed with the current inputs or state.
+    """
     _draw_scaled_text(title or label, title_font_size)
     child_id = "##" + "".join(ch if ch.isalnum() else "_" for ch in label) + "_poincare"
     imgui.begin_child(child_id, width=size[0], height=size[1], border=True)
@@ -362,7 +498,15 @@ def draw_poincare_bloch_plot(label: str, states: Sequence[Any], size: tuple[floa
 
 
 def _extract_stokes_vectors(states: Sequence[Any], max_points: int | None = None) -> list[tuple[float, float, float]]:
-
+    """Converts states to stokes vectors.
+    
+    Args:
+        states: Polarization states to render or convert.
+        max_points (int): Value used for max points.
+    
+    Returns:
+        The computed list of Stokes vector values.
+    """
     vectors: list[tuple[float, float, float]] = []
     source = states if max_points is None else states[-max_points:]
     for state in source:
@@ -373,7 +517,16 @@ def _extract_stokes_vectors(states: Sequence[Any], max_points: int | None = None
 
 
 def _window_stokes_vectors(states: Sequence[Any], *, start_index: int, window_size: int) -> list[tuple[float, float, float]]:
-
+    """Gets all stokes values from within a specified window.
+    
+    Args:
+        states: Polarization states to render or convert.
+        start_index (int): First observation index included in the polarization distribution window.
+        window_size (int): Number of observations included in the polarization distribution window.
+    
+    Returns:
+        Windowed Stokes value list.
+    """
     all_vectors = _extract_stokes_vectors(states, max_points=None)
     if not all_vectors:
         return []
@@ -384,6 +537,7 @@ def _window_stokes_vectors(states: Sequence[Any], *, start_index: int, window_si
 
 
 def _state_to_stokes_vector(state: Any) -> tuple[float, float, float] | None:
+    """Converts state to stokes vector."""
     if state is None:
         return None
 
@@ -398,6 +552,7 @@ def _state_to_stokes_vector(state: Any) -> tuple[float, float, float] | None:
 
 
 def _sequence_to_stokes(value: Any) -> tuple[float, float, float] | None:
+    """Converts a sequence to stokes values."""
     try:
         vals = list(value)
     except TypeError:
@@ -430,7 +585,7 @@ def _sequence_to_stokes(value: Any) -> tuple[float, float, float] | None:
 
 
 def _normalize_stokes(vec: tuple[float, float, float]) -> tuple[float, float, float]:
-
+    """Applies normalization to stokes vector."""
     s1, s2, s3 = vec
     norm = math.sqrt(s1 * s1 + s2 * s2 + s3 * s3)
     if norm <= 0.0 or not math.isfinite(norm):
@@ -439,7 +594,15 @@ def _normalize_stokes(vec: tuple[float, float, float]) -> tuple[float, float, fl
 
 
 def _get_or_create_poincare_texture(vectors: list[tuple[float, float, float]], size: tuple[float, float]) -> tuple[int | None, int, int]:
-
+    """Return or create poincare texture for internal use.
+    
+    Args:
+        vectors: Normalized Stokes vectors on the Poincare sphere.
+        size: Requested display size for the ImGui child region.
+    
+    Returns:
+        Poincare texture.
+    """
     width = int(max(256, min(768, size[0] - 18)))
     height = int(max(256, min(768, size[1] - 48)))
     key = (width, height, tuple((round(x, 4), round(y, 4), round(z, 4)) for x, y, z in vectors))
@@ -473,7 +636,7 @@ def _get_or_create_poincare_texture(vectors: list[tuple[float, float, float]], s
 
 
 def _ensure_3d_axes_compatibility(axes: Any) -> None:
-
+    """Ensure 3d axes compatibility is available or valid."""
     try:
         current_dist = getattr(axes, "_dist", None)
         axes._dist = 10.0 if current_dist is None else float(current_dist)
@@ -497,7 +660,7 @@ def _ensure_3d_axes_compatibility(axes: Any) -> None:
 
 
 def _safe_set_3d_box_aspect(axes: Any, aspect: tuple[float, float, float]) -> None:
-
+    """Safely sets the Poincare sphere box aspect to fit within the panel."""
     _ensure_3d_axes_compatibility(axes)
     try:
         axes.set_box_aspect(aspect)
@@ -513,11 +676,12 @@ def _safe_set_3d_box_aspect(axes: Any, aspect: tuple[float, float, float]) -> No
 
 
 def _render_poincare_distribution_rgba(vectors: list[tuple[float, float, float]], *, width: int, height: int):
+    """Internal helper that calls _render_poincare_distribution_points_rgba; retained for backwars compatibility."""
     return _render_poincare_distribution_points_rgba(vectors, width=width, height=height)
 
 
 def _point_density_values(data):
-
+    """Calculates point density from stokes vector."""
     s1 = data[:, 0]
     s2 = data[:, 1]
     s3 = data[:, 2]
@@ -536,7 +700,7 @@ def _point_density_values(data):
 
 
 def _normalized_distribution_data(vectors: list[tuple[float, float, float]]):
-
+    """Creates a normalized Poincare distribution."""
     data = np.asarray(vectors, dtype=float)
     if data.ndim != 2 or data.shape[1] < 3:
         return np.asarray([[1.0, 0.0, 0.0]], dtype=float)
@@ -550,7 +714,17 @@ def _normalized_distribution_data(vectors: list[tuple[float, float, float]]):
 
 
 def _render_poincare_distribution_points_rgba(vectors: list[tuple[float, float, float]], *, width: int, height: int):
+    """
+    Render a qutip poincare sphere with density colored polarization samples and return its RGBA image.
 
+    Args:
+        vectors (list[tuple[float, float, float]]): Normalized Stokes vectors on the Poincare sphere.
+        width (int): Width of the ImGui child region in pixels.
+        height (int): Height of the ImGui child region in pixels.
+
+    Returns:
+        numpy.ndarray: RGBA image buffer of the point based Poincare distribution.
+    """
     dpi = 100
     fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi)
     axes = fig.add_axes([0.04, 0.03, 0.92, 0.82], projection="3d")
@@ -583,7 +757,15 @@ def _render_poincare_distribution_points_rgba(vectors: list[tuple[float, float, 
     return rgba
 
 def _rgba_to_texture(rgba) -> int:
+    """
+    Upload an RGBA Numpy image to OpenGL and return the newly allocated texture identifier.
 
+    Args:
+        rgba (numpy.ndarray): Height-by-width RGBA image buffer to upload to OpenGL.
+
+    Returns:
+        int: OpenGL texture identifier containing the supplied RGBA image.
+    """
     height, width = int(rgba.shape[0]), int(rgba.shape[1])
     texture_id = GL.glGenTextures(1)
     GL.glBindTexture(GL.GL_TEXTURE_2D, texture_id)
@@ -606,7 +788,14 @@ def _rgba_to_texture(rgba) -> int:
 
 
 def _draw_poincare_fallback(vectors: list[tuple[float, float, float]], size: tuple[float, float], reason: str) -> None:
+    """
+    Draw a lightweight 2D ImGui Poincare projection when the qutip or mpl texture renderer is unavailable.
 
+    Args:
+        vectors (list[tuple[float, float, float]]): Normalized Stokes vectors on the Poincare sphere.
+        size (tuple[float, float]): Available ImGui display width and height in pixels.
+        reason (str): Short rendering error description shown by the fallback view.
+    """
     draw_list = imgui.get_window_draw_list()
     x0, y0 = imgui.get_cursor_screen_pos()
     w, h = size
@@ -651,7 +840,30 @@ def _draw_poincare_fallback(vectors: list[tuple[float, float, float]], size: tup
 
 
 def save_timing_plot(path: str, xs: Sequence[float], ys: Sequence[float], *, title: str, title_font_size: float, x_axis_label: str, x_axis_font_size: float, y_axis_label: str, y_axis_font_size: float, tick_frequency: float, tick_font_size: float, target_xs: Sequence[float] | None = None, target_ys: Sequence[float] | None = None, target_label: str = "Target", target_y_axis_label: str = "Target", target_y_axis_font_size: float = 13.0) -> None:
-    
+    """
+    Write a mpl timing plot, including an optional right-axis target series, to an image file.
+
+    Args:
+        path (str): Input file path to read or output file path to write.
+        xs (Sequence[float]): X-axis coordinates for generated predictions or plot data.
+        ys (Sequence[float]): Primary y-axis prediction values.
+        title (str): Title displayed above the plot or native dialog.
+        title_font_size (float): Font size used for the plot title in points.
+        x_axis_label (str): Text displayed beside the primary x-axis.
+        x_axis_font_size (float): Font size used for the x-axis label in points.
+        y_axis_label (str): Text displayed beside the primary y-axis.
+        y_axis_font_size (float): Font size used for the y-axis label in points.
+        tick_frequency (float): Major x-axis tick interval; zero leaves locator selection to mpl.
+        tick_font_size (float): Font size used for x- and y-axis tick labels in points.
+        target_xs (Sequence[float] | None): Optional x-axis coordinates aligned with observed target values.
+        target_ys (Sequence[float] | None): Optional observed target values drawn on the right y-axis.
+        target_label (str): Legend label used for the optional target series.
+        target_y_axis_label (str): Label displayed beside the optional right y-axis.
+        target_y_axis_font_size (float): Font size used for the right y-axis label in points.
+
+    Raises:
+        ValueError: Raised when fewer than two timing samples are available to save.
+    """
     if len(xs) < 2 or len(ys) < 2:
         raise ValueError("No timing plot data is available to save.")
 
@@ -684,6 +896,20 @@ def save_timing_plot(path: str, xs: Sequence[float], ys: Sequence[float], *, tit
 
 
 def save_poincare_plot(path: str, states: Sequence[Any], *, title: str, title_font_size: float, start_index: int = 0, window_size: int = 200) -> None:
+    """
+    Render the requested Poincare distribution window and save the resulting image with a user-specified title.
+
+    Args:
+        path (str): Input file path to read or output file path to write.
+        states (Sequence[Any]): Polarization observations expressed as Stokes vectors, qubit amplitudes, or supported mappings.
+        title (str): Title displayed above the plot or native dialog.
+        title_font_size (float): Font size used for the plot title in points.
+        start_index (int): Zero-based first observation included in the polarization distribution window.
+        window_size (int): Number of consecutive observations included in the polarization distribution window.
+
+    Raises:
+        ValueError: Raised when the requested observation window contains no usable polarization states.
+    """
     vectors = _window_stokes_vectors(states, start_index=start_index, window_size=window_size)
     if not vectors:
         raise ValueError("No polarization plot data is available to save.")

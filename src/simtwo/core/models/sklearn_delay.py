@@ -12,6 +12,11 @@ from simtwo.core.models.base import DelayPrediction
 
 @dataclass
 class SklearnDelayModel:
+    """Wrap a trained sklearn estimator for simtwo runtime prediction.
+    
+    The wrapper converts runtime feature dicts into the estimators expected feature order and then maps the scalar estimator output into either a timing prediction or a polarization state update depending on model_family.
+    """
+
     estimator: Any
     feature_names: list[str]
     target_name: str
@@ -22,13 +27,23 @@ class SklearnDelayModel:
     _rng: np.random.Generator = field(init=False)
     _stokes: np.ndarray = field(init=False)
 
-    # https://realpython.com/python-data-classes/
+    # Learned about post init here--super useful imo: https://realpython.com/python-data-classes/
     def __post_init__(self) -> None:
+        """Initialize random state and the current polarization Stokes vector."""
         self._rng = np.random.default_rng(self.seed)
         self._stokes = np.asarray([1.0, 0.0, 0.0], dtype=float)
 
     @classmethod
     def from_bundle(cls, bundle: dict[str, Any], *, model_family: str | None = None) -> "SklearnDelayModel":
+        """Create a model wrapper from a saved training bundle.
+        
+        Args:
+            bundle: Dictionary produced by save_trained_model_bundle. It must contain an *estimator* and should include feature and target metadata.
+            model_family (str): Optional override for the saved model family.
+        
+        Returns:
+            SklearnDelayModel: Configured SklearnDelayModel instance.
+        """
         saved_family = str(
             bundle.get("model_family")
             or bundle.get("metadata", {}).get("model_family")
@@ -45,10 +60,33 @@ class SklearnDelayModel:
 
     @classmethod
     def from_path(cls, path: str | Path, *, model_family: str | None = None) -> "SklearnDelayModel":
+        """Load a saved model bundle from disk and wrap it.
+        
+        Args:
+            path (str | Path): Path to a joblib model bundle.
+            model_family (str): Optional override for the saved model family.
+        
+        Returns:
+            SklearnDelayModel: Configured SklearnDelayModel instance.
+        """
         bundle = load_trained_model_bundle(path)
         return cls.from_bundle(bundle, model_family=model_family)
 
     def predict(self, features: dict[str, float]) -> DelayPrediction:
+        """Predict a timing value or polarization update from one feature row.
+
+        TODO: Add means of ensuring input features are prooperly mapped?
+        
+        Args:
+            features: Mapping containing all names listed in feature_names.
+        
+        Returns:
+            DelayPrediction: DelayPrediction formatted for the active model family.
+        
+        Raises:
+            KeyError: If a required feature is missing.
+            ValueError: If a feature cannot be converted to a float.
+        """
         row = [float(features[name]) for name in self.feature_names]
         pred = float(self.estimator.predict([row])[0])
 
@@ -58,6 +96,14 @@ class SklearnDelayModel:
         return self._predict_timing(pred)
 
     def _predict_timing(self, pred: float) -> DelayPrediction:
+        """Convert a scalar estimator output into a timing prediction.
+        
+        Args:
+            pred (float): Raw scalar value returned by the estimator.
+        
+        Returns:
+            DelayPrediction: DelayPrediction with unit-aware delay fields when the target name identifies a path delay unit; otherwise the raw value is used for plotting.
+        """
         target_key = self.target_name.strip().lower()
         path_delay_ps: float | None = None
         path_delay_ns: float | None = None
@@ -100,6 +146,14 @@ class SklearnDelayModel:
         )
 
     def _predict_polarization(self, pred: float) -> DelayPrediction:
+        """Convert a scalar estimator output into a polarization state update.
+        
+        Args:
+            pred (float): Raw scalar value returned by the estimator.
+        
+        Returns:
+            DelayPrediction: DelayPrediction containing the current normalized Stokes vector and a Poincare state dictionary for the observer.
+        """
         target_key = self.target_name.strip().lower()
 
         if target_key in {"s1", "stokes_s1", "stokes_1"}:

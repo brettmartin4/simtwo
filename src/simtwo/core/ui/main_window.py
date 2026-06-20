@@ -1,3 +1,5 @@
+"""Coordinate simtwo application state, batch generation, data processing, model configuration, observer plots, export actions, and window lifecycle."""
+
 from __future__ import annotations
 
 import csv
@@ -46,6 +48,7 @@ import filedialpy
 
 @dataclass
 class ObserverDataset:
+    """Store an observer-ready dataframe, the currently selected x/y columns, and cached numeric series used to draw imported datasets."""
     name: str
     df: pd.DataFrame
     path: str = ""
@@ -59,7 +62,14 @@ class ObserverDataset:
 
 
 class SimImGuiApp:
+    """Own the state and orchestration logic for the simtwo ImGui application. The controller bridges GUI panels to simulation backends, data-processing operations, trained models, and rendered observer textures."""
     def __init__(self, backend: SimulationBackend):
+        """
+        Initialize application state, model controls, imported-data collections, observer caches, plot settings, and the supplied simulation backend.
+
+        Args:
+            backend (SimulationBackend): Backend responsible for loading data, running generation, and exporting results.
+        """
         self.backend = backend
         self.ui = UIState()
         self.ui.run_speed_ms = 100
@@ -200,20 +210,24 @@ class SimImGuiApp:
 
     @property
     def selected_feature_names(self) -> list[str]:
+        """CSV column names currently checked as input features for model training or model configuration."""
         return [name for enabled, name in zip(self.feature_mask, self.csv_headers) if enabled]
 
     @property
     def selected_target_name(self) -> str | None:
+        """CSV column currently selected as the training target, or None when no valid target is selected."""
         if 0 <= self.new_target_index < len(self.csv_headers):
             return self.csv_headers[self.new_target_index]
         return None
 
     @property
     def selected_model_kind(self) -> str:
+        """Internal identifier for the model type selected in the training controls."""
         return self.model_kind_keys[self.model_kind_idx]
 
     @property
     def selected_model_family(self) -> str | None:
+        """Selected observer/model family as timing or polarization, or None until the user chooses one."""
         if 0 <= self.model_family_idx < len(self.model_family_options):
             value = self.model_family_options[self.model_family_idx]
             return value or None
@@ -221,6 +235,7 @@ class SimImGuiApp:
 
     @property
     def selected_model_family_label(self) -> str:
+        """Human-readable description of the observer visualization associated with the selected model family."""
         family = self.selected_model_family
         if family == "timing":
             return "Timing line plot"
@@ -230,16 +245,29 @@ class SimImGuiApp:
     
     @property
     def selected_timing_x_axis_mode(self) -> str:
+        """Whether timing plots currently use generated epoch indices or POSIX-time values on the x-axis."""
         if 0 <= self.timing_plot_x_axis_idx < len(self.timing_plot_x_axis_options):
             return self.timing_plot_x_axis_options[self.timing_plot_x_axis_idx]
         return "epoch"
 
     def default_timing_x_axis_label(self) -> str:
+        """
+        Return the default x-axis label appropriate for the selected timing-axis mode.
+
+        Returns:
+            str: Default label for the selected timing x-axis mode.
+        """
         if self.selected_timing_x_axis_mode == "posix_time":
             return "POSIX Time"
         return "Epoch"
 
     def set_timing_x_axis_idx(self, idx: int) -> None:
+        """
+        Select a timing x-axis source, preserve a user-customized label when possible, and invalidate the displayed texture.
+
+        Args:
+            int: Index of the timing x-axis option selected in the settings popup.
+        """
         old_default_labels = {"Epoch", "Index", "Index / Epoch", "POSIX Time"}
         old_label = str(self.timing_plot_x_axis_label or "")
         self.timing_plot_x_axis_idx = max(0, min(int(idx), len(self.timing_plot_x_axis_options) - 1))
@@ -249,9 +277,16 @@ class SimImGuiApp:
     
     @property
     def split_test_pct(self) -> int:
+        """Percentage of samples remaining for the test split after the configured training and validation percentages."""
         return max(0, 100 - int(self.split_train_pct) - int(self.split_validation_pct))
     
     def current_split_fractions(self) -> tuple[float, float, float]:
+        """
+        Clamp the configured train/validation percentages to a valid partition and return normalized train, validation, and test fractions.
+
+        Returns:
+            tuple[float, float, float]: Valid train, validation, and test fractions that sum to one.
+        """
         train_pct = max(1, min(98, int(self.split_train_pct)))
         max_val = max(1, 99 - train_pct)
         validation_pct = max(1, min(max_val, int(self.split_validation_pct)))
@@ -265,8 +300,13 @@ class SimImGuiApp:
 
         return train_pct / 100.0, validation_pct / 100.0, test_pct / 100.0
 
-    # TODO: split this into multiple files, maybe?
     def current_model_params(self) -> dict[str, Any]:
+        """
+        Return the algorithm-specific parameter dictionary required to train the model selected in the UI.
+
+        Returns:
+            dict[str, Any]: Algorithm-specific training parameters for the selected model.
+        """
         if self.selected_model_kind == "random_forest":
             return {
                 "n_estimators": int(self.rf_n_estimators),
@@ -276,10 +316,29 @@ class SimImGuiApp:
         return {}
 
     def set_status(self, text: str) -> None:
+        """
+        Safely replace the status message displayed in the Controls panel.
+
+        Args:
+            text (str): Text to render in the ImGui window.
+        """
         with self.ui.lock:
             self.ui.status = text
 
     def _ask_save_path(self, *, title: str, default_filename: str, default_extension: str, filters: list[str], initial_dir: str | None = None) -> str:
+        """
+        Open the native save-file dialog and append the requested extension when the selected filename has none.
+
+        Args:
+            title (str): Title displayed above the plot or native dialog.
+            default_filename (str): Filename initially shown in the native save dialog.
+            default_extension (str): Extension appended when the selected filename has no extension.
+            filters (list[str]): File-type filters passed to the native save dialog.
+            initial_dir (str | None): Initial directory shown in the native save dialog; None uses the current working directory.
+
+        Returns:
+            str: Chosen output path including the default extension when necessary, or an empty string when cancelled.
+        """
         path = filedialpy.saveFile(
             initial_dir=initial_dir or os.getcwd(),
             initial_file=default_filename,
@@ -296,15 +355,34 @@ class SimImGuiApp:
         return path
 
     def cb_plot(self, epoch: int, travel_time_s: float) -> None:
+        """
+        Record one generated timing prediction delivered by a backend callback.
+
+        Args:
+            int: Generated sample or simulation epoch associated with the prediction.
+            float: Generated timing prediction in seconds.
+        """
         with self.ui.lock:
             self.ui.epochs.append(epoch)
             self.ui.times.append(travel_time_s)
 
     def cb_conditions(self, conditions: dict[str, Any]) -> None:
+        """
+        Store the latest environmental or simulation-condition mapping delivered by a backend callback.
+
+        Args:
+            conditions (dict[str, Any]): Latest condition mapping emitted by the simulation backend.
+        """
         with self.ui.lock:
             self.ui.conditions = dict(conditions)
 
     def cb_poincare(self, state: Any) -> None:
+        """
+        Record the latest polarization state and append it to the generated Poincare-state history when available.
+
+        Args:
+            Any: Polarization state emitted by the backend for one generated observation.
+        """
         if state is None:
             return
         with self.ui.lock:
@@ -313,6 +391,7 @@ class SimImGuiApp:
                 self.ui.poincare_states.append(state)
 
     def _clear_plot_state(self) -> None:
+        """Clear runtime callbacks, generated series, plot metadata, and the current OpenGL observer texture."""
         with self.ui.lock:
             self.ui.epochs.clear()
             self.ui.times.clear()
@@ -331,6 +410,12 @@ class SimImGuiApp:
         self.clear_generated_plot_texture()
 
     def _set_plot_label_for_config(self, config: ChannelModelConfig) -> None:
+        """
+        Synchronize observer labels, target labels, model names, and model-family display state with an applied channel-model configuration.
+
+        Args:
+            config (ChannelModelConfig): Timing or polarization model configuration to activate.
+        """
         family = str(config.model_family or "timing").strip().lower()
         self.active_model_family = family if family in {"timing", "polarization"} else "timing"
 
@@ -368,6 +453,12 @@ class SimImGuiApp:
             self.timing_plot_target_y_axis_label = f"Actual {config.target_name}"
 
     def generate(self, *, status_prefix: str = "Generated") -> None:
+        """
+        Run the active backend once over its loaded data, capture all callback outputs, and build a new static observer texture.
+
+        Args:
+            status_prefix (str): Prefix used in the status message after batch generation completes.
+        """
         if self.active_model_family not in {"timing", "polarization"}:
             self.set_status("Select a model family and apply a model before generating the observer plot.")
             return
@@ -392,6 +483,7 @@ class SimImGuiApp:
             self.set_status(f"Generate failed: {exc}")
 
     def clear_generated_plot_texture(self) -> None:
+        """Delete the current observer texture and reset its dimensions and empty-state message."""
         if self.observer_plot_texture_id is not None:
             delete_plot_texture(self.observer_plot_texture_id)
         self.observer_plot_texture_id = None
@@ -400,6 +492,7 @@ class SimImGuiApp:
         self.observer_plot_message = "Press Generate after applying a model."
 
     def capture_generated_plot_data(self) -> None:
+        """Copy callback data from thread-safe UI state into stable generated arrays used to render and export the observer plot."""
         with self.ui.lock:
             epochs = list(self.ui.epochs)
             ys = list(self.ui.times)
@@ -423,6 +516,7 @@ class SimImGuiApp:
             self.generated_target_column = target_column
 
     def rebuild_generated_plot_texture(self) -> None:
+        """Create a fresh timing or Poincare texture from stored generated data and current plot settings."""
         self.clear_generated_plot_texture()
         try:
             if self.active_model_family == "polarization":
@@ -479,7 +573,12 @@ class SimImGuiApp:
             self.observer_plot_message = f"Plot rendering failed: {exc}"
 
     def current_poincare_footer_text(self) -> str:
+        """
+        Describe the currently applied Poincarr distribution window in a footer suitable for the observer panel.
 
+        Returns:
+            str: Description of the applied Poincare distribution window.
+        """
         count = len(self.generated_poincare_states)
         if count <= 0:
             return ""
@@ -490,7 +589,7 @@ class SimImGuiApp:
         return f"Distribution window: observations {start}–{max(start, end - 1)} of {count} ({used} sample(s))"
     
     def clamp_polarization_distribution_controls(self) -> None:
-
+        """Clamp pending polarization-window controls to the number of generated Poincare observations."""
         count = len(self.generated_poincare_states)
         max_count = max(1, count)
         self.polarization_distribution_window_size = max(1, min(int(self.polarization_distribution_window_size), max_count))
@@ -498,7 +597,7 @@ class SimImGuiApp:
         self.polarization_distribution_start_idx = max(0, min(int(self.polarization_distribution_start_idx), max_start))
 
     def clamp_applied_polarization_distribution_controls(self) -> None:
-
+        """Clamp the applied polarization-window controls to the number of generated Poincare observations."""
         count = len(self.generated_poincare_states)
         max_count = max(1, count)
         self.applied_polarization_distribution_window_size = max(1, min(int(self.applied_polarization_distribution_window_size), max_count))
@@ -506,30 +605,43 @@ class SimImGuiApp:
         self.applied_polarization_distribution_start_idx = max(0, min(int(self.applied_polarization_distribution_start_idx), max_start))
 
     def apply_polarization_distribution_selection(self) -> None:
-
+        """Copy pending polarization window controls into the applied values used by the next generated Poincare texture."""
         self.clamp_polarization_distribution_controls()
         self.applied_polarization_distribution_window_size = int(self.polarization_distribution_window_size)
         self.applied_polarization_distribution_start_idx = int(self.polarization_distribution_start_idx)
         self.clamp_applied_polarization_distribution_controls()
 
     def set_polarization_distribution_window_size(self, value: int) -> None:
+        """
+        Store a pending distribution-window size and clamp it to the generated polarization history.
 
+        Args:
+            int: Pending number of observations to include in the next applied distribution window.
+        """
         self.polarization_distribution_window_size = int(value)
         self.clamp_polarization_distribution_controls()
 
     def set_polarization_distribution_start_idx(self, value: int) -> None:
+        """
+        Store a pending start observation for the Poincare distribution window and clamp it to valid bounds.
 
+        Args:
+            int: Pending zero-based first observation for the next applied distribution window.
+        """
         self.polarization_distribution_start_idx = int(value)
         self.clamp_polarization_distribution_controls()
 
     # Keeping this so it doesnt break the other parts of the code (less for me to refactor, lol)
     def start(self) -> None:
+        """Runs the generate function. Retained for reverse compatibility."""
         self.generate()
 
     def restart(self) -> None:
+        """Runs the generate function with regenerate arg. Retained for reverse compatibility."""
         self.generate(status_prefix="Regenerated")
 
     def stop(self) -> None:
+        """Request the backend to stop."""
         self.ui.running = False
         try:
             self.backend.stop()
@@ -539,15 +651,37 @@ class SimImGuiApp:
 
     # helper functions
     def import_csv(self) -> None:
+        """Reset import selections and open the CSV import picker."""
         self.show_import_picker = True
         self.import_selected_files = []
         self.show_import_format_window = False
 
     def _read_csv_headers(self, path: str) -> list[str]:
+        """
+        Read a supported table and return its non-empty column names as normalized strings.
+
+        Args:
+            path (str): Input file path to read or output file path to write.
+
+        Returns:
+            list[str]: Normalized non-empty column names from the source table.
+        """
         headers = self._read_table(path).columns.tolist()
         return [str(h).strip() for h in headers if h is not None]
 
     def _read_table(self, path: str) -> pd.DataFrame:
+        """
+        Load a CSV or text table with utf8 BOM handling and a delimiter detection fallback.
+
+        Args:
+            path (str): Input file path to read or output file path to write.
+
+        Returns:
+            pd.DataFrame: Parsed CSV or text table.
+
+        Raises:
+            ValueError: Raised when the file extension is not CSV or text.
+        """
         ext = Path(path).suffix.lower()
         if ext not in {".csv", ".txt"}:
             raise ValueError("Only .csv and .txt files are supported.")
@@ -557,6 +691,15 @@ class SimImGuiApp:
             return pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
         
     def _default_observer_y_column(self, df: pd.DataFrame) -> str:
+        """
+        Choose a sensible default numeric y-axis column while avoiding common time/index columns.
+
+        Args:
+            df (pd.DataFrame): Dataframe whose columns or values are inspected, cached, or registered.
+
+        Returns:
+            str: Preferred numeric observer y-axis column, or a safe fallback column name.
+        """
         cols = [str(col) for col in df.columns]
         preferred_block = {"epoch", "posix_time", "row_index"}
         for col in cols:
@@ -570,6 +713,15 @@ class SimImGuiApp:
         return cols[0] if cols else ""
 
     def _default_observer_x_column(self, df: pd.DataFrame) -> str:
+        """
+        Choose a sensible default observer x-axis column, preferring POSIX time, epoch, and recognized time columns.
+
+        Args:
+            df (pd.DataFrame): Dataframe whose columns or values are inspected, cached, or registered.
+
+        Returns:
+            str: Preferred time/index observer x-axis column, or row_index as a fallback.
+        """
         for candidate in (POSIX_TIME_COL, "epoch"):
             if candidate in df.columns:
                 return candidate
@@ -579,7 +731,14 @@ class SimImGuiApp:
         return "row_index"
 
     def _register_observer_dataset(self, name: str, df: pd.DataFrame, *, path: str = "") -> None:
+        """
+        Add or replace a named imported dataset available for direct observer plotting while retaining its selection state.
 
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+            df (pd.DataFrame): Dataframe whose columns or values are inspected, cached, or registered.
+            str: Source path retained for display and for re-identifying the imported dataset.
+        """
         clean_name = name.strip() or f"dataset_{len(self.observer_datasets) + 1}"
         observer = ObserverDataset(name=clean_name, df=df, path=path, x_column=self._default_observer_x_column(df), y_column=self._default_observer_y_column(df))
         replaced = False
@@ -595,6 +754,12 @@ class SimImGuiApp:
             self.observer_datasets.append(observer)
 
     def _invalidate_observer_dataset_cache(self, dataset: ObserverDataset) -> None:
+        """
+        Clear a datasets cached numeric plotting arrays after its selected columns or source data change.
+
+        Args:
+            dataset (ObserverDataset): Dataset object to inspect, mutate, cache, or select.
+        """
         dataset.cached_plot_xs.clear()
         dataset.cached_plot_ys.clear()
         dataset.cached_x_column = ""
@@ -602,6 +767,15 @@ class SimImGuiApp:
         dataset.cache_ready = False
 
     def _build_observer_dataset_cache(self, dataset: ObserverDataset) -> tuple[list[float], list[float], str, str]:
+        """
+        Coerce the selected observer columns into aligned numeric x/y arrays and cache the result for repeated observer rendering.
+
+        Args:
+            dataset (ObserverDataset): Dataset object to inspect, mutate, cache, or select.
+
+        Returns:
+            tuple[list[float], list[float], str, str]: Cached numeric x/y series and the columns used to create them.
+        """
         if dataset.df.empty:
             self._invalidate_observer_dataset_cache(dataset)
             return [], [], dataset.x_column, dataset.y_column
@@ -627,6 +801,12 @@ class SimImGuiApp:
         return dataset.cached_plot_xs, dataset.cached_plot_ys, x_col, y_col
 
     def _load_csv_and_open_headers(self, path: str) -> None:
+        """
+        Load a file into the backend and observer registry, initialize feature/target controls, and open the CSV-header selector.
+
+        Args:
+            path (str): Input file path to read or output file path to write.
+        """
         self.backend.load_data(path)
         df = self._read_table(path)
         headers = [str(h).strip() for h in df.columns.tolist() if h is not None]
@@ -644,6 +824,12 @@ class SimImGuiApp:
         self.set_status(f"Loaded into modeling suite: {path}")
 
     def _start_import_formatting(self, paths: list[str]) -> None:
+        """
+        Prepare file-header and merge-option state before opening the multi-file import-format modal.
+
+        Args:
+            paths (list[str]): Selected source-table paths prepared for multi-file import formatting.
+        """
         if not paths:
             self.set_status("Select at least one data file first.")
             return
@@ -667,7 +853,15 @@ class SimImGuiApp:
         self.show_import_format_window = True
 
     def _build_import_datasets(self) -> tuple[list[ProcessingDataset], dict[str, Any]]:
+        """
+        Build processing datasets from selected import files according to the configured keep, concatenate, feature-merge, or POSIX-time-merge mode.
 
+        Returns:
+            tuple[list[ProcessingDataset], dict[str, Any]]: Constructed processing datasets and an import summary.
+
+        Raises:
+            ValueError: Raised when no files are selected or the requested merge configuration cannot be satisfied.
+        """
         paths = list(self.import_candidate_paths)
         if not paths:
             raise ValueError("No input files selected.")
@@ -763,6 +957,7 @@ class SimImGuiApp:
         return datasets, summary
 
     def confirm_import_format_and_load(self) -> None:
+        """Commit the selected import configuration, populate the processing workspace, and report whether dataset construction succeeded."""
         try:
             datasets, summary = self._build_import_datasets()
             if not datasets:
@@ -786,6 +981,7 @@ class SimImGuiApp:
 
     # Data processing helper funcs
     def _sync_processing_selection(self) -> None:
+        """Normalize active processing-dataset and selected-variable state after imports, deletions, or user selections."""
         if not self.processing_datasets:
             self.processing_active_dataset_idx = 0
             self.processing_selected_dataset_indices = set()
@@ -802,30 +998,54 @@ class SimImGuiApp:
 
     @property
     def active_processing_dataset(self) -> ProcessingDataset:
+        """Active processing dataset after synchronizing processing-selection state."""
         self._sync_processing_selection()
         return self.processing_datasets[self.processing_active_dataset_idx]
 
     @property
     def selected_processing_datasets(self) -> list[ProcessingDataset]:
+        """Processing datasets currently selected for multi-dataset operations."""
         self._sync_processing_selection()
         return [self.processing_datasets[idx] for idx in sorted(self.processing_selected_dataset_indices)]
 
     @property
     def selected_processing_variables(self) -> list[str]:
+        """Active dataset columns currently selected for processing operations."""
         self._sync_processing_selection()
         cols = list(self.active_processing_dataset.df.columns)
         return [col for col in cols if col in self.processing_selected_variables]
 
     def dataset_columns(self, dataset: ProcessingDataset) -> list[str]:
+        """
+        Return the column names available in a processing dataset.
+
+        Args:
+            dataset (ProcessingDataset): Dataset object to inspect, mutate, cache, or select.
+
+        Returns:
+            list[str]: Dataset column names in display order.
+        """
         return [str(col) for col in dataset.df.columns]
 
     def set_active_processing_dataset(self, idx: int) -> None:
+        """
+        Make a valid processing dataset active and ensure it remains selected for operations.
+
+        Args:
+            idx (int): Zero-based index selected by an ImGui control.
+        """
         if 0 <= idx < len(self.processing_datasets):
             self.processing_active_dataset_idx = idx
             self.processing_selected_dataset_indices.add(idx)
             self._sync_processing_selection()
 
     def toggle_processing_dataset_selection(self, idx: int) -> None:
+        """
+        Toggle one processing dataset in the set used by multi-dataset operations.
+
+        Args:
+            idx (int): Zero-based index selected by an ImGui control.
+        """
         if idx in self.processing_selected_dataset_indices:
             self.processing_selected_dataset_indices.remove(idx)
         else:
@@ -835,6 +1055,12 @@ class SimImGuiApp:
         self._sync_processing_selection()
 
     def toggle_processing_variable(self, name: str) -> None:
+        """
+        Toggle one active-dataset column in the set used by processing operations.
+
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+        """
         if name in self.processing_selected_variables:
             self.processing_selected_variables.remove(name)
         else:
@@ -842,6 +1068,15 @@ class SimImGuiApp:
         self._sync_processing_selection()
 
     def set_processing_time_metadata(self, dataset_idx: int, *, time_column: str | None = None, timezone: str | None = None, posix_unit: str | None = None) -> None:
+        """
+        Assign time-column, timezone, and POSIX-unit metadata to a processing dataset.
+
+        Args:
+            dataset_idx (int): Zero-based index of a processing dataset.
+            time_column (str | None): Source column interpreted as the dataset time coordinate.
+            timezone (str | None): Timezone name used while converting source timestamps to POSIX time.
+            posix_unit (str | None): Unit of POSIX-time values, such as s, ms, us, or ns. (Add more later, perhaps?)
+        """
         ds = self.processing_datasets[dataset_idx]
 
         if time_column is not None:
@@ -854,6 +1089,12 @@ class SimImGuiApp:
             ds.pending_posix_unit = posix_unit
 
     def apply_processing_time_metadata(self, dataset_idx: int) -> None:
+        """
+        Materialize normalized POSIX-time values for a processing dataset using its configured time metadata.
+
+        Args:
+            dataset_idx (int): Zero-based index of a processing dataset.
+        """
         ds = self.processing_datasets[dataset_idx]
 
         if not ds.pending_time_column:
@@ -878,6 +1119,13 @@ class SimImGuiApp:
         )
 
     def _append_processing_dataset(self, dataset: ProcessingDataset, *, select: bool = True) -> None:
+        """
+        Append a derived processing dataset and optionally make it the active selected dataset.
+
+        Args:
+            ProcessingDataset: Newly derived or imported dataset to add to the processing workspace.
+            select (bool): Whether the appended dataset should become active and selected.
+        """
         self.processing_datasets.append(dataset)
         new_idx = len(self.processing_datasets) - 1
         if select:
@@ -887,6 +1135,7 @@ class SimImGuiApp:
         self._sync_processing_selection()
 
     def clear_all_processing_data(self) -> None:
+        """Remove every dataset and selection from the processing workspace."""
         self.processing_datasets = []
         self.processing_selected_dataset_indices = set()
         self.processing_selected_variables = set()
@@ -894,17 +1143,31 @@ class SimImGuiApp:
         self.set_status("Cleared all data from the processing suite.")
 
     def exit_processing_window(self) -> None:
+        """Close the processing workspace and clear its temporary selection state."""
         self.show_processing_window = False
         self.set_status("Closed the data processing suite.")
 
     def _selected_dataset_count(self) -> int:
+        """
+        Return the number of processing datasets selected for the current operation.
+
+        Returns:
+            int: Number of selected processing datasets.
+        """
         return len(self.selected_processing_datasets)
 
     def _selected_variable_count(self) -> int:
+        """
+        Return the number of active-dataset variables selected for the current operation.
+
+        Returns:
+            int: Number of selected active-dataset variables.
+        """
         return len(self.selected_processing_variables)
 
     # TODO: Update this later to include horizonal scroll bar (the stats are cut off as-is)
     def show_processing_stats(self) -> None:
+        """Compute descriptive statistics for the active processing dataset and display them in the statistics popup."""
         try:
             self.processing_stats_text = descriptive_stats_text(self.active_processing_dataset)
             self.processing_stats_popup = True
@@ -912,6 +1175,7 @@ class SimImGuiApp:
             self.set_status(f"Stats failed: {exc}")
 
     def processing_take_derivative(self) -> None:
+        """Create a derived dataset containing first derivatives for the currently selected variables."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) != 1:
@@ -922,6 +1186,7 @@ class SimImGuiApp:
             self.set_status(f"Derivative failed: {exc}")
 
     def processing_quantify_variable(self) -> None:
+        """Create quantified rolling-window features for the selected variables using the configured measurement method and window size."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) != 1:
@@ -938,6 +1203,7 @@ class SimImGuiApp:
             self.set_status(f"Quantification failed: {exc}")
 
     def processing_remove_variables(self) -> None:
+        """Create a derived dataset with the currently selected variables removed."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) < 1:
@@ -950,6 +1216,7 @@ class SimImGuiApp:
             self.set_status(f"Remove variable failed: {exc}")
 
     def processing_polynomial_expand(self) -> None:
+        """Create polynomial and interaction terms for the selected variables using the configured expansion order."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) < 1:
@@ -960,6 +1227,7 @@ class SimImGuiApp:
             self.set_status(f"Polynomial expansion failed: {exc}")
 
     def processing_drop_duplicate_timestamps(self) -> None:
+        """Create a derived dataset with duplicate timestamps removed using the active time column."""
         try:
             removed = remove_duplicate_timestamps(self.active_processing_dataset)
             self.set_status(f"Removed {removed} duplicate timestamp row(s).")
@@ -967,6 +1235,7 @@ class SimImGuiApp:
             self.set_status(f"Duplicate timestamp removal failed: {exc}")
 
     def processing_drop_nan_rows(self) -> None:
+        """Create a derived dataset with rows containing missing values removed."""
         try:
             removed = drop_nan_rows(self.active_processing_dataset, self.selected_processing_variables)
             self.set_status(f"Removed {removed} row(s) containing NaNs in the selected variables.")
@@ -974,6 +1243,7 @@ class SimImGuiApp:
             self.set_status(f"NaN row removal failed: {exc}")
 
     def processing_interpolate_missing(self) -> None:
+        """Create a derived dataset with numeric missing values interpolated using the configured interpolation order."""
         try:
             interpolate_missing(self.active_processing_dataset, self.selected_processing_variables, order=max(1, int(self.processing_interp_order)))
             self.set_status("Interpolated missing values for the selected variables.")
@@ -981,6 +1251,7 @@ class SimImGuiApp:
             self.set_status(f"Interpolation failed: {exc}")
 
     def processing_fill_missing(self) -> None:
+        """Create a derived dataset with missing values filled in the configured forward, backward, or bidirectional direction."""
         try:
             direction = self.processing_fill_directions[self.processing_fill_direction_idx]
             fill_missing(self.active_processing_dataset, self.selected_processing_variables, direction=direction)
@@ -989,6 +1260,7 @@ class SimImGuiApp:
             self.set_status(f"Fill failed: {exc}")
 
     def processing_new_interaction_term(self) -> None:
+        """Create a derived dataset containing a named interaction term formed from the selected variables."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) < 2:
@@ -1003,6 +1275,7 @@ class SimImGuiApp:
             self.set_status(f"Interaction term failed: {exc}")
 
     def processing_merge_values_average(self) -> None:
+        """Create a derived dataset containing the row-wise average of selected variables under a user-provided name."""
         try:
             vars_ = self.selected_processing_variables
             if len(vars_) < 2:
@@ -1017,6 +1290,7 @@ class SimImGuiApp:
             self.set_status(f"Merge values failed: {exc}")
 
     def processing_downsample_selected_sets(self) -> None:
+        """Create downsampled copies of the selected processing datasets using the configured method and window size."""
         try:
             datasets = self.selected_processing_datasets
             if len(datasets) < 1:
@@ -1038,6 +1312,7 @@ class SimImGuiApp:
             self.set_status(f"Downsample failed: {exc}")
 
     def processing_merge_selected_sets(self) -> None:
+        """Merge the selected processing datasets into one dataset using the configured POSIX-time merge behavior."""
         try:
             source_count = len(self.selected_processing_datasets)
             merged = merge_datasets_on_posix(
@@ -1050,6 +1325,7 @@ class SimImGuiApp:
             self.set_status(f"Multi-set merge failed: {exc}")
 
     def save_active_processing_dataset(self) -> None:
+        """Open a save dialog and write the active processing dataset to CSV."""
         try:
             ds = self.active_processing_dataset
             safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in ds.name) or "dataset"
@@ -1070,6 +1346,7 @@ class SimImGuiApp:
             self.set_status(f"Save dataframe failed: {exc}")
 
     def send_active_dataset_to_modeling(self) -> None:
+        """Write the active processing dataset to a temporary CSV and load it into the model-configuration workflow."""
         try:
             if len(self.processing_datasets) != 1:
                 raise ValueError("Send to Modeling Suite requires exactly one dataset in the processing suite. Merge first if needed.")
@@ -1089,6 +1366,15 @@ class SimImGuiApp:
 
 
     def observer_dataset_by_name(self, name: str) -> ObserverDataset | None:
+        """
+        Return the registered observer dataset with the requested name, or None when it is no longer available.
+
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+
+        Returns:
+            ObserverDataset | None: Matching observer dataset, or None when no dataset has that name.
+        """
         for ds in self.observer_datasets:
             if ds.name == name:
                 return ds
@@ -1096,6 +1382,7 @@ class SimImGuiApp:
 
     @property
     def selected_observer_datasets(self) -> list[ObserverDataset]:
+        """Observer datasets currently selected for direct plotting."""
         selected: list[ObserverDataset] = []
         for ds in self.observer_datasets:
             if ds.name in self.observer_selected_dataset_names:
@@ -1103,30 +1390,65 @@ class SimImGuiApp:
         return selected
 
     def toggle_observer_dataset(self, name: str) -> None:
+        """
+        Toggle an imported dataset in the observer-view selection set.
+
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+        """
         if name in self.observer_selected_dataset_names:
             self.observer_selected_dataset_names.remove(name)
         else:
             self.observer_selected_dataset_names.add(name)
 
     def set_observer_dataset_y_column(self, name: str, column: str) -> None:
+        """
+        Select the y-axis column for an imported observer dataset and invalidate its numeric-series cache.
+
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+            column (str): Column selected as an observer x- or y-axis source.
+        """
         ds = self.observer_dataset_by_name(name)
         if ds is not None and ds.y_column != column:
             ds.y_column = column
             self._invalidate_observer_dataset_cache(ds)
 
     def set_observer_dataset_x_column(self, name: str, column: str) -> None:
+        """
+        Select the x-axis column for an imported observer dataset and invalidate its numeric-series cache.
+
+        Args:
+            name (str): User-visible dataset, column, or derived-feature name.
+            column (str): Column selected as an observer x- or y-axis source.
+        """
         ds = self.observer_dataset_by_name(name)
         if ds is not None and ds.x_column != column:
             ds.x_column = column
             self._invalidate_observer_dataset_cache(ds)
 
     def observer_dataset_plot_series(self, dataset: ObserverDataset) -> tuple[list[float], list[float], str, str]:
+        """
+        Return cached or newly coerced numeric x/y data for a directly plotted observer dataset.
+
+        Args:
+            dataset (ObserverDataset): Dataset object to inspect, mutate, cache, or select.
+
+        Returns:
+            tuple[list[float], list[float], str, str]: Cached numeric x/y values and the columns that produced them.
+        """
         if (dataset.cache_ready and dataset.cached_x_column == dataset.x_column and dataset.cached_y_column == dataset.y_column):
             return dataset.cached_plot_xs, dataset.cached_plot_ys, dataset.cached_x_column, dataset.cached_y_column
 
         return self._build_observer_dataset_cache(dataset)
     
     def active_observer_dataset(self) -> ObserverDataset | None:
+        """
+        Return the dataset associated with the current modeling CSV, falling back to the first registered observer dataset.
+
+        Returns:
+            ObserverDataset | None: Dataset currently associated with modeling, or a fallback observer dataset.
+        """
         if self.csv_path:
             active_name = os.path.splitext(os.path.basename(self.csv_path))[0]
             ds = self.observer_dataset_by_name(active_name)
@@ -1137,6 +1459,15 @@ class SimImGuiApp:
         return None
     
     def _timing_posix_column(self, dataset: ObserverDataset | None = None) -> str:
+        """
+        Find the POSIX-time column available for timing plots in the active or supplied observer dataset.
+
+        Args:
+            ObserverDataset | None: Dataset to inspect; None uses the active observer dataset.
+
+        Returns:
+            str | None: Available POSIX-time column name, or None when absent.
+        """
         dataset = dataset or self.active_observer_dataset()
         if dataset is None or dataset.df.empty:
             return ""
@@ -1148,9 +1479,21 @@ class SimImGuiApp:
         return ""
 
     def timing_posix_x_available(self) -> bool:
+        """
+        Return whether the active observer dataset provides a usable POSIX-time x-axis column.
+
+        Returns:
+            bool: True when POSIX-time values can be used for the timing x-axis.
+        """
         return bool(self._timing_posix_column())
 
     def timing_x_axis_status(self) -> str:
+        """
+        Return UI guidance describing whether POSIX-time x-axis selection is available.
+
+        Returns:
+            str: User-facing description of the selected timing x-axis source.
+        """
         if self.timing_posix_x_available():
             dataset = self.active_observer_dataset()
             column = self._timing_posix_column(dataset)
@@ -1158,6 +1501,15 @@ class SimImGuiApp:
         return "No numeric POSIX time feature is available; index/epoch x-axis will be used."
 
     def current_timing_plot_xs(self, epochs: list[int]) -> list[float]:
+        """
+        Return timing-plot x values using epochs or aligned POSIX-time values according to the selected axis mode.
+
+        Args:
+            epochs (list[int]): Generated epoch indices used when POSIX time is not selected.
+
+        Returns:
+            list[float]: X-axis values aligned to generated timing predictions.
+        """
         if self.selected_timing_x_axis_mode != "posix_time":
             return [float(epoch) for epoch in epochs]
 
@@ -1180,6 +1532,15 @@ class SimImGuiApp:
         return xs
 
     def _timing_target_column_candidates(self, dataset: ObserverDataset | None = None) -> list[str]:
+        """
+        Return numeric observer columns that are plausible ground-truth targets for the currently active timing model.
+
+        Args:
+            dataset (ObserverDataset | None): Dataset object to inspect, mutate, cache, or select.
+
+        Returns:
+            list[str]: Numeric columns that may supply observed target values.
+        """
         candidates: list[str] = []
         for value in (self.active_target_name, self.selected_target_name):
             if value and value not in candidates:
@@ -1201,6 +1562,12 @@ class SimImGuiApp:
         return candidates
 
     def _available_timing_target_column(self) -> tuple[ObserverDataset | None, str]:
+        """
+        Return the active observer dataset and first available numeric target column that matches the timing-model target.
+
+        Returns:
+            tuple[ObserverDataset | None, str | None]: Dataset and matching target column available for overlay, if any.
+        """
         dataset = self.active_observer_dataset()
         if dataset is None or dataset.df.empty:
             return None, ""
@@ -1215,6 +1582,12 @@ class SimImGuiApp:
         return dataset, ""
 
     def timing_target_overlay_status(self) -> tuple[bool, str]:
+        """
+        Return whether a target overlay can be shown and provide a UI-ready explanation of the detected target column.
+
+        Returns:
+            tuple[bool, str]: Whether target overlay is available and a UI-ready status message.
+        """
         dataset, column = self._available_timing_target_column()
         if dataset is None:
             return False, "Load a dataset with a numeric target column to enable target overlay."
@@ -1225,6 +1598,15 @@ class SimImGuiApp:
         return False, f"No numeric timing target column is available in '{dataset.name}'."
 
     def current_timing_target_overlay(self, xs: list[float]) -> tuple[list[float], list[float], str]:
+        """
+        Return x/y target-overlay arrays aligned to the generated timing predictions when the right-axis overlay is enabled.
+
+        Args:
+            list[float]: Generated timing x-axis values used to align returned target observations.
+
+        Returns:
+            tuple[list[float], list[float], str]: Aligned target x/y values and the column name used for the overlay.
+        """
         if not self.timing_plot_show_target:
             return [], [], ""
         dataset, column = self._available_timing_target_column()
@@ -1245,6 +1627,7 @@ class SimImGuiApp:
 
     # Helpers for modeling
     def export_results(self) -> None:
+        """Open a save dialog and export backend simulation results to CSV."""
         try:
             path = self._ask_save_path(
                                     title="Export Results as CSV",
@@ -1263,7 +1646,7 @@ class SimImGuiApp:
 
 
     def save_current_plot(self) -> None:
-
+        """Open a save dialog and export the currently generated timing or Poincare plot using the active formatting settings."""
         try:
             if self.active_model_family == "polarization":
                 default_filename = "poincare_plot.png"
@@ -1322,6 +1705,12 @@ class SimImGuiApp:
 
 
     def apply_model_config(self, config: ChannelModelConfig) -> None:
+        """
+        Validate and activate a selected timing or polarization model configuration, then reset stale observer output.
+
+        Args:
+            config (ChannelModelConfig): Timing or polarization model configuration to activate.
+        """
         if config.model_family not in {"timing", "polarization"}:
             self.set_status("Select a model family first: timing or polarization.")
             return
@@ -1335,6 +1724,7 @@ class SimImGuiApp:
             self.set_status(f"Model config failed: {exc}")
 
     def train_and_activate_model(self) -> None:
+        """Train a new model from the selected CSV columns, save its bundle, and activate it in the configured model family."""
         family = self.selected_model_family
         if family is None:
             self.set_status("Select a model family first: timing or polarization.")
@@ -1377,6 +1767,7 @@ class SimImGuiApp:
             self.set_status(f"Training failed: {exc}")
 
     def save_current_model(self) -> None:
+        """Open a save dialog and serialize the currently active trained model bundle."""
         safe_name = self.new_model_name.strip() or "trained_model"
         safe_name = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in safe_name).strip("_") or "trained_model"
 
@@ -1402,7 +1793,9 @@ class SimImGuiApp:
             self.set_status(f"Save model failed: {exc}")
 
     # others helpers (drawing, etc)
+    # TODO: Add more shortcuts (and menu options)
     def _shortcut_ctrl_a(self) -> bool:
+        """Detect a Ctrl+A keypress once and request the About dialog."""
         if self.window is None:
             return False
         ctrl = (
@@ -1413,6 +1806,7 @@ class SimImGuiApp:
         return ctrl and a_key
 
     def _shortcut_ctrl_i(self) -> bool:
+        """Detect a Ctrl+I keypress once and request the CSV import flow."""
         if self.window is None:
             return False
         ctrl = (
@@ -1423,16 +1817,31 @@ class SimImGuiApp:
         return ctrl and i_key
 
     def _model_type(self) -> str:
+        """
+        Return the model-source option selected in the configuration panel.
+
+        Returns:
+            str: Selected model-source option label.
+        """
         return self.model_type_options[self.model_type_idx]
 
     def close_window(self) -> None:
+        """Mark the GLFW window for closing when a window is active."""
         if self.window is not None and glfw is not None:
             glfw.set_window_should_close(self.window, True)
 
     def draw_model_config_panel(self, width: int, height: int) -> None:
+        """
+        Delegate rendering of the model-configuration panel using this application controller as state.
+
+        Args:
+            int: Requested width of the model-configuration panel.
+            int: Requested height of the model-configuration panel.
+        """
         draw_model_config_panel(self, width, height)
 
     def draw(self) -> None:
+        """Render one complete ImGui frame, including menu, observer, controls, dialogs, and model configuration. (See imgui docs for intuitive explanation as to how this works differently from previously-used tcl/tk)"""
         draw_menu_bar(self)
 
         if self._shortcut_ctrl_a():
@@ -1487,6 +1896,12 @@ class SimImGuiApp:
 
 
 def run_app(backend: SimulationBackend) -> None:
+    """
+    Create, run, and cleanly shut down the Simtwo ImGui application around the supplied simulation backend.
+
+    Args:
+        backend (SimulationBackend): Backend responsible for loading data, running generation, and exporting results.
+    """
     # TODO: Can probably remove since the app won t run without
     if glfw is None or imgui is None or GlfwRenderer is None or GL is None:
         # update: Do I still need these? Or does the toml file ensure that everything is installed? This might be superfluous, if so:

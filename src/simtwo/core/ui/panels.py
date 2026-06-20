@@ -1,3 +1,5 @@
+"""Draw the main GUI panels for observation, controls, and model config."""
+
 from __future__ import annotations
 
 import os
@@ -17,6 +19,11 @@ if TYPE_CHECKING:
 
 
 def draw_menu_bar(app: "SimImGuiApp") -> None:
+    """Draw the top level menu bar for file and help actions.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+    """
     if imgui.begin_main_menu_bar():
         if imgui.begin_menu("File", True):
             clicked, _ = imgui.menu_item("Import CSV", "Ctrl+I", False, True)
@@ -45,6 +52,11 @@ def draw_menu_bar(app: "SimImGuiApp") -> None:
 
 
 def draw_left_panel(app: "SimImGuiApp") -> None:
+    """Draw the observer panel and plot controls.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+    """
     #with app.ui.lock:
     #    xs = list(app.ui.epochs)
     #    ys = list(app.ui.times)
@@ -97,6 +109,11 @@ def draw_left_panel(app: "SimImGuiApp") -> None:
 
 
 def draw_polarization_distribution_controls(app: "SimImGuiApp") -> None:
+    """Draw controls for selecting the polarization distribution window shown on the next generation run.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+    """
     
     count = len(app.generated_poincare_states)
     imgui.spacing()
@@ -129,6 +146,11 @@ def draw_polarization_distribution_controls(app: "SimImGuiApp") -> None:
     
 
 def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
+    """Draw the modal editor for timing and polarization plot labels and formatting.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+    """
 
     opened, _ = imgui.begin_popup_modal("Plot Settings", True)
     if not opened:
@@ -209,6 +231,11 @@ def draw_plot_settings_popup(app: "SimImGuiApp") -> None:
 
 
 def draw_right_panel(app: "SimImGuiApp") -> None:
+    """Draw backend controls, conditions, model status, data source, and status output.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+    """
     imgui.begin_child("##right_panel", width=360, height=0, border=True)
 
     imgui.text("Controls")
@@ -279,6 +306,13 @@ def draw_right_panel(app: "SimImGuiApp") -> None:
 
 
 def draw_model_config_panel(app: "SimImGuiApp", width: int, height: int) -> None:
+    """Draw controls for selecting, loading, training, and applying channel models.
+    
+    Args:
+        app (SimImGuiApp): App controller whose state is read or updated.
+        width (int): Requested texture or figure width in pixels.
+        height (int): Requested texture or figure height in pixels.
+    """
     imgui.begin_child("##model_config_panel", width=width, height=height, border=True)
 
     imgui.text("Model Configuration")

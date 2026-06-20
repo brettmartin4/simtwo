@@ -18,8 +18,9 @@ class PhysicalDelayModel:
             "temperature": <float>
         }
 
-    You can bind GUI dataset columns like temperature_x -> temperature
-    using FeatureBindings in the runtime session.
+    The model expands the configured reference distance using a linear thermal expansion term, converts that distance to path delay, and adds small Gaussian jitter.
+    
+    It expects a ``temperature`` feature unless the runtime binds another loaded dataset column to that feature name.
     """
     base_distance_m: float = 64_000.0
     alpha_per_c: float = 5e-7
@@ -33,9 +34,22 @@ class PhysicalDelayModel:
     _rng: np.random.Generator = field(init=False)
 
     def __post_init__(self) -> None:
+        """Initialize the random generator used for timing jitter."""
         self._rng = np.random.default_rng(self.seed)
 
     def predict(self, features: dict[str, float]) -> DelayPrediction:
+        """Predict propagation delay for one feature row.
+        
+        Args:
+            features: Feature mapping containing "temperature" in degrees celsius.
+        
+        Returns:
+            DelayPrediction with path delay in picoseconds, nanoseconds, and seconds, plus metadata describing the temperature and jitter sample.
+        
+        Raises:
+            KeyError: If "temperature" is missing from the feature mapping.
+            ValueError: If the temperature cannot be converted to float.
+        """
         temp_c = float(features["temperature"])
 
         distance_m = self.base_distance_m * (

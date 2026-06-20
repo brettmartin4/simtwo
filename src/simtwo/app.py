@@ -12,6 +12,7 @@ from simtwo.core.backends.gui_backend import build_sequence_gui_backend, build_s
 
 
 def load_experiment_from_script(script_path: str):
+    """Loads a backend experiment python file to interact with the GUI."""
 
     path = Path(script_path).resolve()
     module_name = "simtwo_user_experiment"
@@ -31,7 +32,6 @@ def load_experiment_from_script(script_path: str):
     if hasattr(module, "PLUGIN"):
         return "plugin", module.PLUGIN
 
-
     # new returns include strings for type (tentatively calling old setup legacy for easy remembering)
     if hasattr(module, "build_sim"):
         return "legacy_sim", module.build_sim()
@@ -42,6 +42,7 @@ def load_experiment_from_script(script_path: str):
 
 
 def build_backend(mode: str, experiment: str | None = None):
+    """Builds the backend."""
 
     if mode == "sequence":
         if experiment:
@@ -64,6 +65,8 @@ def build_backend(mode: str, experiment: str | None = None):
 
 
 def main() -> None:
+    """Runs command-line entry point."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["sequence", "standalone"], default="standalone", help="Choose whether to run the full SeQUeNCe-backed experiment or the standalone channel workbench.")
     parser.add_argument("--experiment", default="", help="Optional path to custom SeQUeNCe backend experiment script.")
@@ -73,6 +76,5 @@ def main() -> None:
     run_app(backend)
 
 
-# NOTE: The app worked without this previously, but broke when I implemented the sequence backend functionality. Not sure why.
 if __name__ == "__main__":
     main()

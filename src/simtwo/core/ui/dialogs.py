@@ -1,3 +1,4 @@
+"""Render ImGui dialogs for importing data, selecting models, configuring processing operations, and choosing CSV features."""
 from __future__ import annotations
 
 import os
@@ -18,6 +19,12 @@ DATA_EXTENSIONS = (".csv", ".txt")
 
 
 def _begin_fullscreen_window(name: str):
+    """
+    Begin an ImGui window that fills the main viewport and returns whether the caller should draw its contents.
+
+    Args:
+        str: Unique ImGui identifier for the modal-like full-screen window.
+    """
     vp = imgui.get_main_viewport()
     x, y = vp.pos
     w, h = vp.size
@@ -35,6 +42,12 @@ def _begin_fullscreen_window(name: str):
 
 
 def draw_about_popup(app: "SimImGuiApp") -> None:
+    """
+    Open and render the application About modal when the app has requested it.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if app.want_about_popup:
         imgui.open_popup("About")
         app.want_about_popup = False
@@ -52,6 +65,13 @@ def draw_about_popup(app: "SimImGuiApp") -> None:
 
 
 def _toggle_selected_file(app: "SimImGuiApp", name: str) -> None:
+    """
+    Add or remove a candidate import file from the apps selected-file collection.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+        str: Candidate import filename to add to or remove from the selection.
+    """
     if name in app.import_selected_files:
         app.import_selected_files.remove(name)
     else:
@@ -59,6 +79,12 @@ def _toggle_selected_file(app: "SimImGuiApp", name: str) -> None:
 
 
 def draw_import_csv_picker_window(app: "SimImGuiApp") -> None:
+    """
+    Render the file-picker modal used to choose one or more CSV or text files for the import workflow.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if not app.show_import_picker:
         return
 
@@ -142,6 +168,12 @@ def draw_import_csv_picker_window(app: "SimImGuiApp") -> None:
 
 
 def draw_import_format_window(app: "SimImGuiApp") -> None:
+    """
+    Render the import-format modal used to configure how selected source files are kept, concatenated, or merged.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if not app.show_import_format_window:
         return
 
@@ -343,6 +375,12 @@ def draw_import_format_window(app: "SimImGuiApp") -> None:
 
 
 def draw_existing_model_picker_window(app: "SimImGuiApp") -> None:
+    """
+    Render the file-picker modal used to select an existing serialized model bundle.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if not app.show_existing_model_picker:
         return
 
@@ -409,6 +447,12 @@ def draw_existing_model_picker_window(app: "SimImGuiApp") -> None:
 
 # TODO: Consider maybe splitting this up so it isn't one massive monolith
 def draw_data_processing_window(app: "SimImGuiApp") -> None:
+    """
+    Render the data-processing workspace, including dataset selection, column operations, and output actions.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if not app.show_processing_window:
         return
     if not app.processing_datasets:
@@ -729,6 +773,12 @@ def draw_data_processing_window(app: "SimImGuiApp") -> None:
 
 
 def draw_csv_headers_window(app: "SimImGuiApp") -> None:
+    """
+    Render the CSV-header selection modal used to choose model features and a training target.
+
+    Args:
+        app (SimImGuiApp): Application controller whose state is read or updated by the dialog.
+    """
     if not app.show_csv_headers_window:
         return
 

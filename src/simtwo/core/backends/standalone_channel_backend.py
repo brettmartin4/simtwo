@@ -1,3 +1,5 @@
+"""Provide a self contained channel backend for GUI and notebook experiments."""
+
 from __future__ import annotations
 
 import csv
@@ -16,6 +18,9 @@ from simtwo.core.modeling.model import fit_model_bundle, load_model_spec, load_t
 
 @dataclass
 class StandaloneBackend:
+    """Legacy standalone backend for channel-delay experiments.
+    
+    This backend keeps observations as dicts, computes either a physical timing estimate or a trained model pred, and streams results through GUI callbacks.  Newer GUI paths use RuntimeSession and StandaloneEngine, but this class remains useful for compatibility and lightweight demos."""
     base_distance_m: float = 120_000.0
     alpha_per_C: float = 5e-7
     T0_C: float = 20.0
@@ -36,17 +41,37 @@ class StandaloneBackend:
     _active_model_bundle: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
+        """Initialize derived runtime state after dataclass construction."""
         self._rng = np.random.default_rng(self.seed)
         if not self.observations:
             self.observations = self._default_observations()
 
     def get_mode_name(self) -> str:
+        """Return the display name for the active backend mode.
+        
+        Returns:
+            The requested text value.
+        """
         return "Standalone Channel Workbench"
 
     def set_run_speed(self, ms: int) -> None:
+        """Store the requested run speed val for compatibility with playback oriented code.
+
+        TODO: Consider removing in later builds.
+        
+        Args:
+            ms (int): Run-speed delay in millis.
+        """
         self._run_speed_ms = int(ms)
 
     def start(self, cb_plot, cb_conditions, cb_poincare) -> None:
+        """Run generation and emit plot, condition, and polarization callbacks.
+        
+        Args:
+            cb_plot: Callback that receives the epoch index and plot value.
+            cb_conditions: Callback that receives the current environment/condition dictionary.
+            cb_poincare: Callback that receives the current polarization state, when available.
+        """
         if self._thread and self._thread.is_alive():
             return
 
@@ -90,17 +115,27 @@ class StandaloneBackend:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop any active execution and release runtime resources."""
         self._stop_evt.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
         self._thread = None
 
     def reset(self) -> None:
+        """Return the backend or runner to its initial state and clear generated results."""
         self.stop()
         self.current_epoch = 0
         self._results.clear()
 
     def load_data(self, path: str) -> None:
+        """Load a CSV dataset and make it available to the active backend or runtime session.
+        
+        Args:
+            path (str): File path used for loading or saving data.
+        
+        Raises:
+            ValueError: If the operation cannot be completed with the current inputs or state.
+        """
         observations: list[dict[str, Any]] = []
         #with open(path, "r", newline="", encoding="utf-8") as fh:
         with open(path, "r", newline="", encoding="utf-8-sig") as fh:
@@ -119,6 +154,14 @@ class StandaloneBackend:
         self._results.clear()
 
     def export_results(self, path: str) -> None:
+        """Write the currently generated results to a CSV file.
+        
+        Args:
+            path (str): File path used for loading or saving data.
+        
+        Raises:
+            ValueError: If the operation cannot be completed with the current inputs or state.
+        """
         out_path = Path(path)
         rows = self._results if self._results else [{"epoch": idx, **obs} for idx, obs in enumerate(self.observations)]
         if not rows:
@@ -136,6 +179,11 @@ class StandaloneBackend:
             writer.writerows(rows)
 
     def configure_channel_model(self, config: ChannelModelConfig) -> None:
+        """Apply a default, existing, or newly trained channel model config.
+        
+        Args:
+            config (ChannelModelConfig): Channel model config selected in the GUI.
+        """
         self._channel_model_config = config
 
         if config.mode == "default":
@@ -171,6 +219,14 @@ class StandaloneBackend:
             return
 
     def train_channel_model(self, config: ChannelModelConfig) -> dict[str, Any]:
+        """Train a model from the currently loaded dataset and activate the trained bundle.
+        
+        Args:
+            config (ChannelModelConfig): Channel model config selected in the GUI.
+        
+        Returns:
+            Metadata or result values produced by the operation.
+        """
         bundle = fit_model_bundle(self.observations, config)
         self._active_model_bundle = bundle
         self._channel_model_config = config
@@ -181,11 +237,24 @@ class StandaloneBackend:
         return metadata
 
     def save_current_model(self, path: str) -> None:
+        """Save the currently trained model bundle to disk.
+        
+        Args:
+            path (str): File path used for loading or saving data.
+        
+        Raises:
+            ValueError: If the operation cannot be completed with the current inputs or state.
+        """
         if self._active_model_bundle is None:
             raise ValueError("There is no trained model loaded to save.")
         save_trained_model_bundle(self._active_model_bundle, path)
 
     def _default_observations(self) -> list[dict[str, Any]]:
+        """Helper for default observations.
+        
+        Returns:
+            A list of observation or result dicts.
+        """
         out: list[dict[str, Any]] = []
         for i in range(60):
             out.append(
@@ -199,12 +268,28 @@ class StandaloneBackend:
         return out
 
     def _compute_series_value(self, obs: dict[str, Any]) -> float:
+        """Helper for compute series value.
+        
+        Args:
+            obs: Input observation dictionary.
+        
+        Returns:
+            Float: The computed numeric value.
+        """
         pred = self._predict_with_active_model(obs)
         if pred is not None and np.isfinite(pred):
             return float(pred)
         return self._compute_travel_time(obs)
 
     def _predict_with_active_model(self, obs: dict[str, Any]) -> float | None:
+        """Helper for predict with active model.
+        
+        Args:
+            obs: Input observation dict.
+        
+        Returns:
+            Float: The computed value.
+            """
         bundle = self._active_model_bundle
         if not bundle:
             return None
@@ -232,6 +317,13 @@ class StandaloneBackend:
             return None
 
     def _compute_travel_time(self, obs: dict[str, Any]) -> float:
+        """Helper for compute travel time.
+        
+        Args:
+            obs: Input observation dict.
+        
+        Returns:
+            The computed numeric value."""
         temp_c = self._first_numeric(obs, ["temp_C", "temperature", "temp", "temperature_C"], self.T0_C)
         humidity = self._first_numeric(obs, ["humidity", "humidity_pct", "relative_humidity"], 50.0)
         wind_speed = self._first_numeric(obs, ["wind_speed", "wind", "wind_mps"], 0.0)
@@ -247,6 +339,15 @@ class StandaloneBackend:
         return total_ps * 1e-12
 
     def _compute_poincare_state(self, epoch: int, obs: dict[str, Any]) -> list[complex]:
+        """Helper for computiing poincare state.
+        
+        Args:
+            epoch (int): Value used for epoch.
+            obs: Input observation dictionary.
+        
+        Returns:
+            The computed value.
+        """
         temp_c = self._first_numeric(obs, ["temp_C", "temperature", "temp", "temperature_C"], self.T0_C)
         theta = 0.2 + 0.02 * (temp_c - self.T0_C)
         phi = epoch * 0.1
@@ -256,6 +357,14 @@ class StandaloneBackend:
 
     @staticmethod
     def _coerce_value(value: Any) -> Any:
+        """Helper for coercing value.
+        
+        Args:
+            value: Input value to coerce, normalize, or assign.
+        
+        Returns:
+            The coerces value.
+        """
         if value is None:
             return None
         if isinstance(value, (int, float)):
@@ -270,6 +379,15 @@ class StandaloneBackend:
 
     @staticmethod
     def _first_numeric(obs: dict[str, Any], keys: list[str], default: float) -> float:
+        """Helper for ensuring value is numeric. Otherwise returns a default val.
+        
+        Args:
+            obs: Input observation dictionary.
+            keys: Value used for keys.
+            default (float): Value used for default returns.
+        
+        Returns:
+            The computed numeric value."""
         for key in keys:
             value = obs.get(key)
             if isinstance(value, (int, float)):

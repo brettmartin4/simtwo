@@ -1,7 +1,5 @@
 """
-
 GUI expects a simulator object that provides these at the bare minimum:
-
     - nodes: dict with keys A and B
     - observations: a sequence so len(simulator.observations) works fine
     - current_epoch: int
@@ -10,8 +8,6 @@ GUI expects a simulator object that provides these at the bare minimum:
     - cleanup_after_ids()
     - load_file(path: str)
     - export_file(path: str)
-    - anything else, add here later
-    - TODO: figure out modeling suite in separate window and how to configure
 """
 
 # do not get rid of this (it will cause a runtime error when the example tries to grab the sim class)
@@ -29,19 +25,18 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import FormatStrFormatter, MaxNLocator
 
 
-# Bloch sphere (eventually, but not necessary now)
+# Bloch sphere for poincare rendering
 from qutip import Qobj, Bloch
 
 
 
 class SimulationGUI(ctk.CTk):
-    """GUI for displaying simulator res
-
-    Sim needs to run in a background thread.
-    All UI updates are marshalled onto the Tk main thread using self.after() def
+    """GUI for displaying simulator res. Sim needs to run in a background thread.
+    All UI updates are marshalled onto the Tk main thread using self.after() def.
     """
 
     def __init__(self):
+        """Initialize the SimulationGUI instance."""
         super().__init__()
 
         self.times: list[float] = []
@@ -58,6 +53,7 @@ class SimulationGUI(ctk.CTk):
 
     # building UI
     def _build_gui(self):
+        """Builds gui window and contents."""
         self.title("Quantum Simulation Results")
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -81,9 +77,6 @@ class SimulationGUI(ctk.CTk):
         # Frame for all right side content (Bloch sphere and Conditions)
         self.right_frame = ctk.CTkFrame(self)
         self.right_frame.pack(pady=12, padx=10, side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        # TODO: Bloch sphere in the upper part of the right frame (refotmat axes)
-        self._bloch_enabled = False
 
         self._bloch_enabled = True
 
@@ -145,6 +138,7 @@ class SimulationGUI(ctk.CTk):
         self.start_button.pack(pady=12, padx=10, side=tk.BOTTOM)
 
     def _reset_plot_axes(self):
+        """Returns timing plot axes to default values."""
         self.plot.clear()
         self.plot.set_title("Photon Travel Time")
         self.plot.set_xlabel("Epoch")
@@ -154,6 +148,7 @@ class SimulationGUI(ctk.CTk):
         self.plot.set_xlim(0, 10)
 
     def _about(self):
+        """Handles contents of the "about" section."""
         messagebox.showinfo(
             "About",
             "Simulation 2 (GUI Edition!)\n\nCurrently plots travel time vs epoch and shows per-epoch conditions with jitter and thermal influence.\n"
@@ -162,6 +157,7 @@ class SimulationGUI(ctk.CTk):
 
     # for handling window exits
     def on_close(self):
+        """Handle the close event (window exit)."""
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             try:
                 if self.simulator is not None:
@@ -172,6 +168,7 @@ class SimulationGUI(ctk.CTk):
 
     # UI controls
     def on_speed_change(self):
+        """Handle the speed change event. TODO: Scheduled for removal since all plots are auto-generated in the most recent build."""
         if self.simulator is None:
             return
         try:
@@ -180,6 +177,7 @@ class SimulationGUI(ctk.CTk):
             messagebox.showwarning("Speed", f"Could not set speed: {e}")
 
     def restart_simulation(self):
+        """Handle restart simulation."""
         if self.simulator is None:
             return
 
@@ -205,6 +203,7 @@ class SimulationGUI(ctk.CTk):
 
     # File bar items
     def load_file(self):
+        """Handles loading a file into the GUI."""
         if self.simulator is None:
             return
         file_path = filedialog.askopenfilename(
@@ -220,6 +219,7 @@ class SimulationGUI(ctk.CTk):
             messagebox.showinfo("No File", "No file was selected.")
 
     def export_file(self):
+        """Handle exporting a file from the GUI."""
         if self.simulator is None:
             return
         file_path = filedialog.asksaveasfilename(
@@ -237,6 +237,7 @@ class SimulationGUI(ctk.CTk):
 
     # SIM START
     def start_simulation(self):
+        """Begin simulation in background thread."""
         if self.simulator is None:
             messagebox.showwarning("Simulator", "No simulator attached.")
             return
@@ -257,6 +258,7 @@ class SimulationGUI(ctk.CTk):
         self.after(0, self._update_plot_ui, epoch, travel_time)
 
     def _update_plot_ui(self, epoch: int, travel_time: float):
+        """Updates the UI for the plot."""
         self.times.append(travel_time)
         self.epochs.append(epoch)
         self.plot.plot(self.epochs, self.times, marker="o", color='black', linestyle="-")

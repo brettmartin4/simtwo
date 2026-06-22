@@ -7,9 +7,10 @@
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f?logo=github)](https://brettmartin4.github.io/simtwo/)
 
 
+
 Features configurable backend support for use with other simulators in the future. Make sure to check out the [Documentation!](https://brettmartin4.github.io/simtwo)
 
-[Highlights](#highlights) · [Installation](#installation) · [References](#references) · [To Do](#to-do-list)
+[Highlights](#highlights) · [Installation](#installation) · [Demos](#demos)· [Contribution](#contribution)· [References](#references) 
 
 
 ---
@@ -41,6 +42,8 @@ gui = SimulatorGUI()
 gui.run()
 ```
 
+---
+
 # Demos
 
 ### Time-of-Flight Comparison
@@ -51,32 +54,18 @@ The GUI can be used in standalone mode to demonstrate photon travel time in rela
 
 To verify how using a dynamic channel module impacts the performance of quantum networking experiments in SeQUeNCe, the [two-node entanglement distribution experiment](https://github.com/brettmartin4/simtwo/blob/main/examples/two_node_eg.ipynb) from the SeQUeNCe quantum network simulator is used as the baseline. Performance of the original experiment is compared against results from [our updated experiment notebook](https://github.com/brettmartin4/simtwo/blob/main/examples/simtwo_two_node_eg.ipynb) that contains experiment results using the Simtwo default single-factor physical model. The comparison in results between both experiments is plotted [here](https://github.com/brettmartin4/simtwo/blob/main/examples/two_node_eg_plotting.ipynb).
 
+---
+
+# Contribution
+
+Contributions towards this project are welcomed! If you would like to contribute, please submit a pull request with a detailed summary of changes made.
+
+---
+
 # References
 
-Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending (submitted to SoftwareX for review).
+Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending (submitted to SoftwareX for approval/review).
 
-# To-do List:
-
- - (0) Create new Fig 2 for paper using Simtwo output
- - (1) Validate modeling code with another notebook + load
- - (2) Convert jupyter notebooks to [Marimo](https://marimo.io/)
- - (3) Generate documentation
-    - Look into [pdoc](https://pdoc.dev/) for generating code documentation (or [Sphinx](https://www.sphinx-doc.org/en/master/index.html) in conjunction with [ReadTheDocs.io](https://www.sphinx-doc.org/en/master/index.html))
-       - ~~Go back through and implement argument and return type annotations using the `from __future__ import annotations` standard from [Python PEP 563](https://peps.python.org/pep-0563/) (This will help with auto-generating docs later on, iirc)~~
- - ~~For polarization physical model, use [von Mises-Fischer distribution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.vonmises_fisher.html) when sampling random walk and a modified version of [Qutip's Block sphere](https://qutip.org/docs/4.7/guide/guide-bloch.html) for the Poincare sphere~~
- - ~~Finish applying formatting changes and customization tools to observer mode~~
-    - ~~The customization panel should allow a plot to show up beneath the main observer mode plot that shows a preview of what the matplotlib-produced figure will look like~~
-       - ~~Parameters for this figure should be customizable from this panel, as well (font sizes, axis/header titles, etc)~~
-    - ~~Allow for dual axis with observed and preds~~
-    - ~~Update Poincare sphere plot to reflect stochastic drift model unless specified by some dropdown~~
-    - Allow for multiple loaded models (with one being the active model) from which the plots can use to make visualizations
-       - Change plot axis selection so either y axis can plot: a variable from the loaded dataset, inference from a loaded model, predictions from a physical model
- - ~~Consider adding 1D [Perlin noise](https://dl.acm.org/doi/10.1145/566654.566636) option for jitter modeling (current model only samples a Gaussian at a user-defined or feature-derived stdev and mean)~~
- - ~~Migrate code from private repo here~~
- - ~~Finish and load test notebook for data processing suite~~
- - ~~(1) Complete modeling suite functionality~~
-    - ~~Modify existing code so that target selection requires a "target type" to be selected (Time sync error, prop delay, path delay, polarization fidelity, Stokes vector, etc)~~
- - ~~Add filedialpy to toml~~
- - ~~Write example script for time-of-flight AND entanglement distribution SeQUeNCe experiment~~
+---
 
 [^simtwo]: <sub>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour will begin upon completion of this project.</sub>

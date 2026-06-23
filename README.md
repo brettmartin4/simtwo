@@ -64,7 +64,7 @@ If you would like to contribute, please submit a pull request with a detailed su
 
 # References
 
-Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending (submitted to SoftwareX for approval/review).
+Martin, B., Hodson, D., Wagner, T., Grimaila, M., Richards, A. M., McKenzie, W. (2026) "Simulator 2: A GUI-Enabled Suite of Tools for Dynamic Quantum Channel Modeling and Simulator Backend Integration." Pending (submitted to SoftwareX for approval/review).
 
 
 [^simtwo]: <sub>Simtwo is short for “Simulator 2.” There is, at present, no Simulator 1. This is intentional. Work on Simfour will begin upon completion of this project.</sub>

@@ -10,7 +10,7 @@
 
 Features configurable backend support for use with other simulators in the future. Make sure to check out the [Documentation!](https://brettmartin4.github.io/simtwo)
 
-[Highlights](#highlights) · [Installation](#installation) · [Demos](#demos)· [Contribution](#contribution)· [References](#references) 
+[Highlights](#highlights) · [Installation](#installation) · [Demos](#demos) · [Contribution](#contribution)· [References](#references) 
 
 
 ---

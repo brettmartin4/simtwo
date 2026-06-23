@@ -46,7 +46,7 @@ gui.run()
 
 # Demos
 
-### Time-of-Flight Comparison
+### Time-of-Flight Experiment (Real-World Comparison)
 
 The GUI can be used in standalone mode to demonstrate photon travel time in relation to ground truth data, if available. Simply load a dataset, build a model within the modeling suite, and send the model and data to the observer view for observation. The code used to demonstrate this experiment programmatically in our paper is located in the examples directory, [here](https://github.com/brettmartin4/simtwo/blob/main/examples/demo_sequence_time_of_flight.py).
 
